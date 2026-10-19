@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isMemberOfConversation(convId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/conversations/$(convId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participantIds;
+    }
+
+    // Public user profiles
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        incoming().uid == request.auth.uid &&
+        incoming().displayName is string &&
+        incoming().displayName.size() > 0 &&
+        incoming().displayName.size() <= 80;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        incoming().uid == existing().uid;
+      allow delete: if false;
+
+      // Private settings subcollection
+      match /private/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Username reservation & lookup
+    match /usernames/{username} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() &&
+        incoming().uid == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+        existing().uid == request.auth.uid;
+    }
+
+    // Conversations
+    match /conversations/{conversationId} {
+      // Allow get if document does not exist yet (to check before creation) or user is a participant
+      allow get: if isSignedIn() &&
+        isValidId(conversationId) &&
+        (resource == null || request.auth.uid in resource.data.participantIds);
+
+      allow list: if isSignedIn() &&
+        (request.auth.uid in resource.data.participantIds);
+
+      allow create: if isSignedIn() &&
+        isValidId(conversationId) &&
+        (request.auth.uid in incoming().participantIds) &&
+        incoming().participantIds.size() >= 2 &&
+        incoming().participantIds.size() <= 100;
+
+      allow update: if isSignedIn() &&
+        isValidId(conversationId) &&
+        (request.auth.uid in resource.data.participantIds);
+
+      allow delete: if isSignedIn() &&
+        isValidId(conversationId) &&
+        (
+          (resource.data.type == 'group' && request.auth.uid in resource.data.adminIds) ||
+          (resource.data.type == 'direct' && request.auth.uid in resource.data.participantIds)
+        );
+
+      // Subcollection: Messages
+      match /messages/{messageId} {
+        // Single document get requires valid messageId
+        allow get: if isValidId(conversationId) &&
+          isValidId(messageId) &&
+          isMemberOfConversation(conversationId);
+
+        // Collection list query does NOT have messageId bound
+        allow list: if isValidId(conversationId) &&
+          isMemberOfConversation(conversationId);
+
+        // Document creation by an authorized conversation participant
+        allow create: if isValidId(conversationId) &&
+          isValidId(messageId) &&
+          isMemberOfConversation(conversationId) &&
+          incoming().senderId == request.auth.uid;
+
+        allow update: if isValidId(conversationId) &&
+          isValidId(messageId) &&
+          isMemberOfConversation(conversationId) &&
+          (
+            // Sender editing or soft-deleting
+            (existing().senderId == request.auth.uid && incoming().senderId == existing().senderId) ||
+            // Or participants toggling reactions
+            incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'updatedAt'])
+          );
+
+        allow delete: if isValidId(conversationId) &&
+          isValidId(messageId) &&
+          isMemberOfConversation(conversationId) &&
+          existing().senderId == request.auth.uid;
+      }
+
+      // Subcollection: Typing indicators
+      match /typing/{userId} {
+        allow get, list: if isValidId(conversationId) &&
+          isMemberOfConversation(conversationId);
+
+        allow write: if isValidId(conversationId) &&
+          isSignedIn() &&
+          request.auth.uid == userId &&
+          isMemberOfConversation(conversationId);
+      }
+    }
+  }
+}

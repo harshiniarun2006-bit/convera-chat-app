@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile details for a registered Convera user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 30, "pattern": "^[a-z0-9_]+$" },
+        "avatarUrl": { "type": "string", "maxLength": 2048 },
+        "bio": { "type": "string", "maxLength": 250 },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "username", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Private settings and preferences for a user",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 150 },
+        "readReceipts": { "type": "boolean" },
+        "soundEnabled": { "type": "boolean" },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+        "lastSeenPrivacy": { "type": "string", "enum": ["everyone", "contacts", "nobody"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
+    "UsernameIndex": {
+      "title": "UsernameIndex",
+      "description": "Lookup index mapping unique lowercase username to user UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Direct or group chat conversation room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["direct", "group"] },
+        "participantIds": { "type": "array" },
+        "participantData": { "type": "object" },
+        "name": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 350 },
+        "avatarUrl": { "type": "string", "maxLength": 2048 },
+        "adminIds": { "type": "array" },
+        "createdById": { "type": "string", "maxLength": 128 },
+        "lastMessageText": { "type": "string", "maxLength": 500 },
+        "lastMessageSenderId": { "type": "string", "maxLength": 128 },
+        "lastMessageTime": { "type": "string", "format": "date-time" },
+        "lastMessageType": { "type": "string", "maxLength": 30 },
+        "lastRead": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "type", "participantIds", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message within a direct or group conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 80 },
+        "senderAvatar": { "type": "string", "maxLength": 2048 },
+        "type": { "type": "string", "enum": ["text", "image", "file", "audio", "system"] },
+        "text": { "type": "string", "maxLength": 4000 },
+        "mediaUrl": { "type": "string", "maxLength": 2048 },
+        "fileName": { "type": "string", "maxLength": 200 },
+        "fileSize": { "type": "number" },
+        "audioDuration": { "type": "number" },
+        "replyTo": { "type": "object" },
+        "reactions": { "type": "object" },
+        "isEdited": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "conversationId", "senderId", "type", "createdAt"]
+    },
+    "TypingIndicator": {
+      "title": "TypingIndicator",
+      "description": "Ephemeral typing status indicator for a conversation participant",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 80 },
+        "isTyping": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "isTyping", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "Public profiles of all Convera users for discovery and presence"
+    },
+    "/users/{userId}/private/settings": {
+      "schema": { "$ref": "UserSettings" },
+      "description": "Private user preferences accessible strictly by the user"
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "UsernameIndex" },
+      "description": "Unique username registry to prevent duplicates and enable exact user discovery"
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "Conversation" },
+      "description": "Conversations accessible only to authenticated members in participantIds"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "Message" },
+      "description": "Messages inside a conversation accessible strictly to conversation participants"
+    },
+    "/conversations/{conversationId}/typing/{userId}": {
+      "schema": { "$ref": "TypingIndicator" },
+      "description": "Active typing indicators for participants within a conversation"
+    }
+  }
+}

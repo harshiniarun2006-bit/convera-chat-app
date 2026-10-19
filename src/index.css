@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --cherry-deep: #8F1238;
+    --cherry-dark: #5C102A;
+    --cherry-red: #C52B50;
+    --cherry-light: #E04D71;
+    --blush-pink: #F7DCE3;
+    --soft-rose: #FCECF0;
+    --cream-white: #FFF9F7;
+    --pale-pink-bg: #FFF3F5;
+    --dark-plum: #21131D;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--pale-pink-bg);
+    color: #2D1520;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .dark body,
+  [data-theme='dark'] body,
+  .dark {
+    background-color: #170C15;
+    color: #F8E8EE;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(143, 18, 56, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(143, 18, 56, 0.4);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(247, 220, 227, 0.18);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 220, 227, 0.35);
+}
+
+/* Cherry Gradient Utilities */
+.bg-cherry-gradient {
+  background: linear-gradient(135deg, #8F1238 0%, #C52B50 100%);
+}
+
+.bg-cherry-soft {
+  background: linear-gradient(135deg, #FFF3F5 0%, #FCECF0 100%);
+}
+
+.bg-cherry-dark-gradient {
+  background: linear-gradient(135deg, #2D1222 0%, #170C15 100%);
+}
+
+.border-cherry-subtle {
+  border-color: rgba(143, 18, 56, 0.12);
+}
+
+.shadow-cherry-sm {
+  box-shadow: 0 2px 8px -2px rgba(143, 18, 56, 0.08);
+}
+
+.shadow-cherry-md {
+  box-shadow: 0 4px 16px -2px rgba(143, 18, 56, 0.12), 0 2px 6px -2px rgba(143, 18, 56, 0.06);
+}
+
+.shadow-cherry-lg {
+  box-shadow: 0 10px 25px -5px rgba(143, 18, 56, 0.18), 0 8px 10px -6px rgba(143, 18, 56, 0.08);
+}
+
+/* Animations */
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.98); }
+}
+
+.animate-pulse-subtle {
+  animation: pulseSubtle 2.5s infinite ease-in-out;
+}
