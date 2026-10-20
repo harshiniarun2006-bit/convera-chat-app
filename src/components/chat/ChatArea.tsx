@@ -23,7 +23,7 @@ import {
   OperationType,
   markAsRead
 } from '../../services/firebase';
-import { Conversation, Message, ParticipantData, ReplyInfo } from '../../types';
+import { Conversation, Message, ParticipantData, ReplyInfo, UserProfile } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
@@ -63,11 +63,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       convRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          setConversation({ id: snapshot.id, ...snapshot.data() } as Conversation);
+          setConversation({ ...snapshot.data(), id: snapshot.id } as Conversation);
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `conversations/${conversationId}`);
+        console.warn(`Conversation subscription notice for ${conversationId}:`, error);
       }
     );
 
@@ -89,7 +89,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       (snapshot) => {
         const msgs: Message[] = [];
         snapshot.forEach((d) => {
-          msgs.push({ id: d.id, ...d.data() } as Message);
+          msgs.push({ ...d.data(), id: d.id } as Message);
         });
         setMessages(msgs);
         setLoading(false);
@@ -135,33 +135,53 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
 
+  const isGroup = conversation?.type === 'group';
+  const otherUid = conversation?.participantIds?.find((id) => id !== currentUser?.uid);
+  const partnerData: ParticipantData | null =
+    !isGroup && otherUid && conversation?.participantData
+      ? conversation.participantData[otherUid]
+      : null;
+
+  const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!otherUid || isGroup) {
+      setPartnerProfile(null);
+      return;
+    }
+    const unsubPartner = onSnapshot(
+      doc(db, 'users', otherUid),
+      (snap) => {
+        if (snap.exists()) {
+          setPartnerProfile(snap.data() as UserProfile);
+        }
+      },
+      (err) => console.warn('Partner profile subscription notice:', err)
+    );
+    return () => unsubPartner();
+  }, [otherUid, isGroup]);
+
   if (!conversation) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#FFF9F7] dark:bg-[#1C0F1A]">
+      <div className="h-full w-full flex-1 flex items-center justify-center bg-[#FFF9F7] dark:bg-[#1C0F1A]">
         <Loader2 className="w-8 h-8 animate-spin text-[#8F1238] dark:text-[#E04D71]" />
       </div>
     );
   }
 
-  // Determine partner profile
-  const isGroup = conversation.type === 'group';
-  const otherUid = conversation.participantIds.find((id) => id !== currentUser?.uid);
-  const partnerData: ParticipantData | null =
-    !isGroup && otherUid && conversation.participantData
-      ? conversation.participantData[otherUid]
-      : null;
+  const partnerIsOnline = !isGroup && (partnerProfile?.isOnline ?? false);
 
   const title = isGroup
     ? conversation.name || 'Group Chat'
-    : partnerData?.displayName || 'Convera User';
+    : partnerProfile?.displayName || partnerData?.displayName || 'Convera User';
 
   const subtitle = isGroup
     ? `${conversation.participantIds.length} members`
-    : partnerData?.username ? `@${partnerData.username}` : '';
+    : partnerProfile?.username ? `@${partnerProfile.username}` : partnerData?.username ? `@${partnerData.username}` : '';
 
   const avatarUrl = isGroup
     ? conversation.avatarUrl || 'https://api.dicebear.com/7.x/identicon/svg?seed=cherry'
-    : partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry';
+    : partnerProfile?.avatarUrl || partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry';
 
   // Group messages by date
   const filteredMessages = messages.filter((m) => {
@@ -170,7 +190,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   });
 
   return (
-    <div className="h-full flex flex-col bg-[#FFF3F5] dark:bg-[#170C15] relative overflow-hidden">
+    <div className="h-full w-full flex-1 flex flex-col bg-[#FFF3F5] dark:bg-[#170C15] relative overflow-hidden min-w-0">
       
       {/* Top Header */}
       <div className="px-4 py-3 bg-[#FFF9F7] dark:bg-[#1E111C] border-b border-[#F7DCE3] dark:border-[#33182A] flex items-center justify-between shadow-xs z-10">
@@ -194,8 +214,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 alt={title}
                 className="w-10 h-10 rounded-full object-cover border-2 border-[#8F1238]/30 shadow-xs group-hover:scale-105 transition-transform"
               />
-              {!isGroup && (
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1E111C] rounded-full" />
+              {!isGroup && partnerIsOnline && (
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1E111C] rounded-full shadow-xs" />
               )}
             </div>
 
@@ -213,6 +233,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   <span className="italic animate-pulse">
                     {typingUsers.join(', ')} typing...
                   </span>
+                ) : !isGroup ? (
+                  partnerIsOnline ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active now</span>
+                  ) : (
+                    subtitle
+                  )
                 ) : (
                   subtitle
                 )}
@@ -356,6 +382,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         <ConversationDetailsModal
           conversation={conversation}
           onClose={() => setShowDetails(false)}
+          onLeaveConversation={() => {
+            setShowDetails(false);
+            if (onBackMobile) onBackMobile();
+          }}
         />
       )}
 

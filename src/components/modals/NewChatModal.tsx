@@ -21,9 +21,28 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!userProfile?.uid) return;
+    setLoading(true);
+    searchUsers('', userProfile.uid)
+      .then((users) => {
+        setResults(users);
+      })
+      .catch((err) => console.warn('Directory fetch notice:', err))
+      .finally(() => setLoading(false));
+  }, [userProfile?.uid]);
+
+  const handleInputChange = (val: string) => {
+    setSearchTerm(val);
+    if (!val.trim() && userProfile?.uid) {
+      setSearched(false);
+      searchUsers('', userProfile.uid).then((users) => setResults(users));
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchTerm.trim() || !userProfile) return;
+    if (!userProfile) return;
     setLoading(true);
     setSearched(true);
     setError(null);
@@ -82,7 +101,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
               type="text"
               autoFocus
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               placeholder="Search by @username or name..."
               className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-[#E8CBD3] dark:border-[#452037] bg-white dark:bg-[#281324] text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8F1238]"
             />

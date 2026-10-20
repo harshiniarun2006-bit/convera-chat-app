@@ -14,17 +14,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewGroup,
   onOpenSettings
 }) => {
-  const { userProfile, userSettings, updateSettingsState } = useAuth();
-
-  const toggleTheme = () => {
-    const nextTheme = userSettings?.theme === 'dark' ? 'light' : 'dark';
-    if (nextTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    updateSettingsState({ theme: nextTheme });
-  };
+  const { userProfile, userSettings, toggleTheme } = useAuth();
+  const isDark = userSettings?.theme === 'dark' || (!userSettings?.theme && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   return (
     <header className="md:hidden bg-white dark:bg-[#1C0F1A] border-b border-[#F7DCE3] dark:border-[#33182A] px-4 py-2.5 flex items-center justify-between select-none shrink-0 z-20">
@@ -37,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="p-2 text-zinc-500 hover:text-amber-500 rounded-full"
           title="Toggle theme"
         >
-          {userSettings?.theme === 'dark' ? (
+          {isDark ? (
             <Sun className="w-4 h-4 text-amber-400" />
           ) : (
             <Moon className="w-4 h-4" />

@@ -82,7 +82,7 @@ function ChatDashboard() {
 
         {/* Chat Area or Desktop Placeholder */}
         <div
-          className={`flex-1 h-full ${
+          className={`flex-1 h-full min-w-0 ${
             !selectedConversationId ? 'hidden md:flex' : 'flex'
           }`}
         >

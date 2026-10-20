@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { auth, db, getUserSettings, signOutUser } from '../services/firebase';
+import { auth, db, getUserSettings, signOutUser, updateSettings } from '../services/firebase';
 import { UserProfile, UserSettings } from '../types';
 
 interface AuthContextType {
@@ -12,6 +12,7 @@ interface AuthContextType {
   error: string | null;
   signOut: () => Promise<void>;
   updateSettingsState: (settings: Partial<UserSettings>) => void;
+  toggleTheme: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   error: null,
   signOut: async () => {},
   updateSettingsState: () => {},
+  toggleTheme: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -33,10 +35,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const applyTheme = (theme?: 'light' | 'dark' | 'system') => {
+    const activeTheme = theme || 'light';
+    const isDark =
+      activeTheme === 'dark' ||
+      (activeTheme === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+
+    try {
+      localStorage.setItem('convera_theme', activeTheme);
+    } catch {}
+  };
+
   useEffect(() => {
+    // Initial theme setup from localStorage immediately
+    try {
+      const savedTheme = localStorage.getItem('convera_theme') as 'light' | 'dark' | 'system' | null;
+      if (savedTheme) {
+        applyTheme(savedTheme);
+      }
+    } catch {}
+
     let unsubscribeProfile: (() => void) | null = null;
+    let heartbeatInterval: any = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      // Clean up previous profile listener if any
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+
       setCurrentUser(user);
       if (user) {
         try {
@@ -48,16 +90,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           });
 
-          // Fetch settings
+          // Fetch settings & apply theme
           const settings = await getUserSettings(user.uid);
           if (settings) {
             setUserSettings(settings);
-            // Apply theme
-            if (settings.theme === 'dark') {
-              document.documentElement.classList.add('dark');
-            } else {
-              document.documentElement.classList.remove('dark');
-            }
+            applyTheme(settings.theme);
           }
 
           // Mark presence as online
@@ -66,20 +103,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastSeen: serverTimestamp()
           }).catch(() => {});
 
+          // Liveness heartbeat every 60s
+          heartbeatInterval = setInterval(() => {
+            if (auth.currentUser && !document.hidden) {
+              updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                isOnline: true,
+                lastSeen: serverTimestamp()
+              }).catch(() => {});
+            }
+          }, 60000);
+
         } catch (err) {
           console.error('Error fetching user profile:', err);
           setError('Failed to load profile data');
         }
       } else {
-        if (unsubscribeProfile) {
-          unsubscribeProfile();
-          unsubscribeProfile = null;
-        }
         setUserProfile(null);
         setUserSettings(null);
       }
       setLoading(false);
     });
+
+    // Presence visibility change handler
+    const handleVisibilityChange = () => {
+      if (auth.currentUser) {
+        const profileRef = doc(db, 'users', auth.currentUser.uid);
+        if (document.hidden) {
+          updateDoc(profileRef, {
+            lastSeen: serverTimestamp()
+          }).catch(() => {});
+        } else {
+          updateDoc(profileRef, {
+            isOnline: true,
+            lastSeen: serverTimestamp()
+          }).catch(() => {});
+        }
+      }
+    };
 
     // Cleanup on window unload: set user offline
     const handleBeforeUnload = () => {
@@ -92,11 +152,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       unsubscribeAuth();
       if (unsubscribeProfile) unsubscribeProfile();
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
@@ -108,13 +171,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateSettingsState = (updates: Partial<UserSettings>) => {
-    if (userSettings) {
-      const updated = { ...userSettings, ...updates };
-      setUserSettings(updated);
-      if (updated.theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
+    setUserSettings((prev) => {
+      const base: UserSettings = prev || {
+        email: currentUser?.email || '',
+        soundEnabled: true,
+        readReceipts: true,
+        theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+        lastSeenPrivacy: 'everyone'
+      };
+      const updated: UserSettings = { ...base, ...updates };
+      if (updates.theme) {
+        applyTheme(updated.theme);
+      }
+      return updated;
+    });
+  };
+
+  const toggleTheme = async () => {
+    const isCurrentlyDark = document.documentElement.classList.contains('dark');
+    const nextTheme: 'light' | 'dark' = isCurrentlyDark ? 'light' : 'dark';
+
+    applyTheme(nextTheme);
+
+    setUserSettings((prev) => {
+      const base: UserSettings = prev || {
+        email: currentUser?.email || '',
+        soundEnabled: true,
+        readReceipts: true,
+        theme: nextTheme,
+        lastSeenPrivacy: 'everyone'
+      };
+      return { ...base, theme: nextTheme };
+    });
+
+    if (currentUser?.uid) {
+      try {
+        await updateSettings(currentUser.uid, { theme: nextTheme });
+      } catch (err) {
+        console.error('Failed to sync theme preference:', err);
       }
     }
   };
@@ -128,7 +222,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         error,
         signOut: handleSignOut,
-        updateSettingsState
+        updateSettingsState,
+        toggleTheme
       }}
     >
       {children}

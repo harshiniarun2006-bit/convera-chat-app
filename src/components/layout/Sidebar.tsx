@@ -26,17 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewGroup,
   onOpenSettings
 }) => {
-  const { userProfile, signOut, userSettings, updateSettingsState } = useAuth();
-
-  const toggleTheme = () => {
-    const nextTheme = userSettings?.theme === 'dark' ? 'light' : 'dark';
-    if (nextTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    updateSettingsState({ theme: nextTheme });
-  };
+  const { userProfile, signOut, userSettings, toggleTheme } = useAuth();
+  const isDark = userSettings?.theme === 'dark' || (!userSettings?.theme && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   return (
     <aside className="w-18 md:w-20 bg-white dark:bg-[#160B14] border-r border-[#F7DCE3] dark:border-[#33182A] flex flex-col items-center justify-between py-5 select-none shrink-0 z-20">
@@ -89,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="p-2.5 rounded-full text-zinc-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-[#FCECF0] dark:hover:bg-[#2A1523] transition-colors"
           title="Toggle Light/Dark Theme"
         >
-          {userSettings?.theme === 'dark' ? (
+          {isDark ? (
             <Sun className="w-5 h-5 text-amber-400" />
           ) : (
             <Moon className="w-5 h-5 text-zinc-600" />

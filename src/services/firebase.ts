@@ -355,7 +355,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
     return null;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, `users/${uid}`);
+    console.warn(`User profile fetch notice for users/${uid}:`, err);
+    return null;
   }
 }
 
@@ -392,44 +393,71 @@ export async function updateSettings(uid: string, updates: Partial<UserSettings>
 
 export async function searchUsers(searchTerm: string, currentUid: string): Promise<UserProfile[]> {
   const term = searchTerm.trim().toLowerCase();
-  if (!term) return [];
 
   try {
-    // First try exact username search in usernames index
-    const cleanUsername = term.startsWith('@') ? term.slice(1) : term;
-    const usernameSnap = await getDoc(doc(db, 'usernames', cleanUsername));
-    
     const results: UserProfile[] = [];
+    const seenUids = new Set<string>([currentUid]);
 
-    if (usernameSnap.exists()) {
-      const targetUid = usernameSnap.data().uid;
-      if (targetUid !== currentUid) {
-        const profile = await getUserProfile(targetUid);
-        if (profile) results.push(profile);
+    // If no search term provided, return general user directory
+    if (!term) {
+      try {
+        const usersQuery = query(collection(db, 'users'), limit(30));
+        const snap = await getDocs(usersQuery);
+        snap.forEach((d) => {
+          const data = d.data() as UserProfile;
+          if (data.uid && !seenUids.has(data.uid)) {
+            results.push(data);
+            seenUids.add(data.uid);
+          }
+        });
+      } catch (err) {
+        console.warn('Discovery users query notice:', err);
       }
+      return results;
     }
 
-    // Also query users collection
-    const usersQuery = query(
-      collection(db, 'users'),
-      limit(20)
-    );
-    const snap = await getDocs(usersQuery);
-    snap.forEach((d) => {
-      const data = d.data() as UserProfile;
-      if (data.uid !== currentUid && !results.some(r => r.uid === data.uid)) {
-        if (
-          data.username?.toLowerCase().includes(term) ||
-          data.displayName?.toLowerCase().includes(term)
-        ) {
-          results.push(data);
+    const cleanUsername = term.startsWith('@') ? term.slice(1) : term;
+
+    // 1. Try exact username match from index
+    try {
+      const usernameSnap = await getDoc(doc(db, 'usernames', cleanUsername));
+      if (usernameSnap.exists()) {
+        const targetUid = usernameSnap.data().uid;
+        if (!seenUids.has(targetUid)) {
+          const profile = await getUserProfile(targetUid);
+          if (profile) {
+            results.push(profile);
+            seenUids.add(targetUid);
+          }
         }
       }
-    });
+    } catch (indexErr) {
+      console.warn('Username index lookup notice:', indexErr);
+    }
+
+    // 2. Query users collection
+    try {
+      const usersQuery = query(collection(db, 'users'), limit(50));
+      const snap = await getDocs(usersQuery);
+      snap.forEach((d) => {
+        const data = d.data() as UserProfile;
+        if (data.uid && !seenUids.has(data.uid)) {
+          const uName = (data.username || '').toLowerCase();
+          const dName = (data.displayName || '').toLowerCase();
+          if (uName.includes(cleanUsername) || dName.includes(term) || dName.includes(cleanUsername)) {
+            results.push(data);
+            seenUids.add(data.uid);
+          }
+        }
+      });
+    } catch (usersErr) {
+      console.warn('Users collection query notice:', usersErr);
+    }
 
     return results;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, 'users');
+    console.error('Error during searchUsers:', err);
+    return [];
   }
 }
 
@@ -557,14 +585,16 @@ export async function createGroupChat(
   try {
     await setDoc(convRef, newConversation);
 
-    // Add initial system message
-    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
-      id: '',
+    // Add initial system message with deterministic document ID
+    const msgCol = collection(db, 'conversations', conversationId, 'messages');
+    const msgDocRef = doc(msgCol);
+    await setDoc(msgDocRef, {
+      id: msgDocRef.id,
       conversationId,
-      senderId: currentUser.uid,
+      senderId: currentUid,
       senderName: 'Convera',
       type: 'system',
-      text: `${currentUser.displayName} created group "${name}"`,
+      text: `${currentUser.displayName || 'Admin'} created group "${name}"`,
       createdAt: serverTimestamp()
     });
 
@@ -768,6 +798,13 @@ export async function deleteMessage(
       mediaUrl: '',
       updatedAt: serverTimestamp()
     });
+
+    // Update conversation preview if needed
+    const convRef = doc(db, 'conversations', conversationId);
+    await updateDoc(convRef, {
+      lastMessageText: 'This message was deleted',
+      updatedAt: serverTimestamp()
+    }).catch(() => {});
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `conversations/${conversationId}/messages/${messageId}`);
   }
@@ -822,6 +859,94 @@ export async function updateGroupDetails(
   }
 }
 
+export async function leaveGroup(
+  conversationId: string,
+  user: UserProfile
+): Promise<void> {
+  const convRef = doc(db, 'conversations', conversationId);
+  const convSnap = await getDoc(convRef);
+  if (!convSnap.exists()) return;
+
+  const conv = convSnap.data() as Conversation;
+  const remainingParticipantIds = (conv.participantIds || []).filter(id => id !== user.uid);
+
+  if (remainingParticipantIds.length === 0) {
+    await deleteDoc(convRef);
+    return;
+  }
+
+  const updatedParticipantData = { ...(conv.participantData || {}) };
+  delete updatedParticipantData[user.uid];
+
+  const updatedAdminIds = (conv.adminIds || []).filter(id => id !== user.uid);
+  if (updatedAdminIds.length === 0 && remainingParticipantIds.length > 0) {
+    updatedAdminIds.push(remainingParticipantIds[0]);
+  }
+
+  await updateDoc(convRef, {
+    participantIds: remainingParticipantIds,
+    participantData: updatedParticipantData,
+    adminIds: updatedAdminIds,
+    lastMessageText: `${user.displayName} left the group`,
+    lastMessageSenderId: user.uid,
+    lastMessageTime: serverTimestamp(),
+    lastMessageType: 'system',
+    updatedAt: serverTimestamp()
+  });
+
+  const msgCol = collection(db, 'conversations', conversationId, 'messages');
+  const msgDocRef = doc(msgCol);
+  await setDoc(msgDocRef, {
+    id: msgDocRef.id,
+    conversationId,
+    senderId: user.uid,
+    senderName: 'Convera',
+    type: 'system',
+    text: `${user.displayName} left the group`,
+    createdAt: serverTimestamp()
+  });
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const convRef = doc(db, 'conversations', conversationId);
+  try {
+    await deleteDoc(convRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `conversations/${conversationId}`);
+  }
+}
+
+// Helper to compress image to lightweight base64 Data URL under 500KB
+async function compressImageToDataUrl(file: File | Blob, maxWidth = 1200, quality = 0.75): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // Media upload with storage and resilient base64 fallback
 export async function uploadMediaFile(
   path: string,
@@ -834,7 +959,13 @@ export async function uploadMediaFile(
     const url = await getDownloadURL(uploadTask.ref);
     return url;
   } catch (storageError) {
-    console.warn('Storage upload encountered error, falling back to data URL:', storageError);
+    console.warn('Storage upload encountered error, falling back to optimized inline data URL:', storageError);
+    if (file.type.startsWith('image/')) {
+      return await compressImageToDataUrl(file);
+    }
+    if (file.size > 800 * 1024) {
+      throw new Error('File exceeds transfer limit (800KB). Please upload a smaller file or check your network.');
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);

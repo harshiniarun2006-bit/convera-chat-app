@@ -231,6 +231,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                     onClick={() => {
                       setTheme('light');
                       document.documentElement.classList.remove('dark');
+                      document.documentElement.setAttribute('data-theme', 'light');
+                      try { localStorage.setItem('convera_theme', 'light'); } catch {}
                     }}
                     className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
                       theme === 'light'
@@ -250,6 +252,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                     onClick={() => {
                       setTheme('dark');
                       document.documentElement.classList.add('dark');
+                      document.documentElement.setAttribute('data-theme', 'dark');
+                      try { localStorage.setItem('convera_theme', 'dark'); } catch {}
                     }}
                     className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
                       theme === 'dark'

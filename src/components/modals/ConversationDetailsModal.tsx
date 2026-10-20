@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Users, Shield, LogOut, Edit2, Check, Info, Calendar } from 'lucide-react';
 import { Conversation, ParticipantData } from '../../types';
 import { useAuth } from '../../context/AuthContext';
-import { updateGroupDetails } from '../../services/firebase';
+import { updateGroupDetails, leaveGroup } from '../../services/firebase';
 
 interface ConversationDetailsModalProps {
   conversation: Conversation;
@@ -20,9 +20,26 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
   const [name, setName] = useState(conversation.name || '');
   const [description, setDescription] = useState(conversation.description || '');
   const [saving, setSaving] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const isAdmin = conversation.adminIds?.includes(userProfile?.uid || '') || false;
   const participants = Object.values(conversation.participantData || {});
+
+  const handleLeaveGroup = async () => {
+    if (!userProfile) return;
+    if (window.confirm(`Are you sure you want to leave "${conversation.name || 'this group'}"?`)) {
+      setIsLeaving(true);
+      try {
+        await leaveGroup(conversation.id, userProfile);
+        onClose();
+        if (onLeaveConversation) onLeaveConversation();
+      } catch (err) {
+        console.error('Failed to leave group:', err);
+      } finally {
+        setIsLeaving(false);
+      }
+    }
+  };
 
   const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,6 +188,21 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
               })}
             </div>
           </div>
+
+          {/* Group Actions */}
+          {conversation.type === 'group' && userProfile && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleLeaveGroup}
+                disabled={isLeaving}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/50 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                {isLeaving ? 'Leaving group...' : 'Leave Group'}
+              </button>
+            </div>
+          )}
 
         </div>
 

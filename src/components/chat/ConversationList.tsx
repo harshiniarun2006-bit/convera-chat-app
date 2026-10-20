@@ -3,6 +3,7 @@ import {
   collection,
   query,
   where,
+  limit,
   onSnapshot
 } from 'firebase/firestore';
 import {
@@ -33,6 +34,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [usersPresence, setUsersPresence] = useState<Record<string, { isOnline: boolean; displayName?: string; avatarUrl?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'group' | 'unread'>('all');
@@ -54,7 +56,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       (snapshot) => {
         const list: Conversation[] = [];
         snapshot.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as Conversation);
+          list.push({ ...doc.data(), id: doc.id } as Conversation);
         });
 
         // Client-side sort by updatedAt descending
@@ -68,11 +70,39 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         setLoading(false);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'conversations');
+        setLoading(false);
+        console.warn('Conversations subscription notice:', error);
       }
     );
 
     return () => unsubscribe();
+  }, [currentUser]);
+
+  // Real-time presence listener for participants across conversations
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const usersQuery = query(collection(db, 'users'), limit(100));
+    const unsubscribeUsers = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        const statuses: Record<string, { isOnline: boolean; displayName?: string; avatarUrl?: string }> = {};
+        snapshot.forEach((d) => {
+          const data = d.data();
+          statuses[d.id] = {
+            isOnline: !!data.isOnline,
+            displayName: data.displayName,
+            avatarUrl: data.avatarUrl
+          };
+        });
+        setUsersPresence(statuses);
+      },
+      (err) => {
+        console.warn('Users presence subscription notice:', err);
+      }
+    );
+
+    return () => unsubscribeUsers();
   }, [currentUser]);
 
   const getConversationDisplay = (conv: Conversation) => {
@@ -88,12 +118,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     // Direct chat: get partner
     const otherUid = conv.participantIds.find((id) => id !== currentUser?.uid);
     const partnerData = otherUid && conv.participantData ? conv.participantData[otherUid] : null;
+    const partnerLive = otherUid ? usersPresence[otherUid] : null;
 
     return {
-      title: partnerData?.displayName || 'Convera User',
+      title: partnerLive?.displayName || partnerData?.displayName || 'Convera User',
       subtitle: partnerData?.username ? `@${partnerData.username}` : '',
-      avatarUrl: partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry',
-      isOnline: false
+      avatarUrl: partnerLive?.avatarUrl || partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry',
+      isOnline: partnerLive?.isOnline || false
     };
   };
 
@@ -229,11 +260,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     alt={display.title}
                     className="w-12 h-12 rounded-full object-cover border border-[#8F1238]/20 shadow-sm"
                   />
-                  {conv.type === 'group' && (
+                  {conv.type === 'group' ? (
                     <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-[#8F1238] text-white shadow">
                       <Users className="w-2.5 h-2.5" />
                     </div>
-                  )}
+                  ) : display.isOnline ? (
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-[#1E111C] rounded-full shadow-xs" />
+                  ) : null}
                 </div>
 
                 {/* Details */}

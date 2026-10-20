@@ -23,21 +23,30 @@ export const AuthModal: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [providerDisabled, setProviderDisabled] = useState(false);
+  const checkTimeoutRef = React.useRef<any>(null);
 
-  const handleUsernameChange = async (val: string) => {
+  const handleUsernameChange = (val: string) => {
     const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
     setUsername(clean);
+
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
     if (clean.length < 2) {
       setUsernameStatus('idle');
       return;
     }
+
     setUsernameStatus('checking');
-    try {
-      const isAvailable = await checkUsernameAvailable(clean);
-      setUsernameStatus(isAvailable ? 'available' : 'taken');
-    } catch {
-      setUsernameStatus('idle');
-    }
+    checkTimeoutRef.current = setTimeout(async () => {
+      try {
+        const isAvailable = await checkUsernameAvailable(clean);
+        setUsernameStatus(isAvailable ? 'available' : 'taken');
+      } catch {
+        setUsernameStatus('idle');
+      }
+    }, 350);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

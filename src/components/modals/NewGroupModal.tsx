@@ -23,9 +23,25 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({
   const [creating, setCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  React.useEffect(() => {
+    if (!userProfile?.uid) return;
+    setSearching(true);
+    searchUsers('', userProfile.uid)
+      .then((users) => setSearchResults(users))
+      .catch((err) => console.warn('Group members directory fetch notice:', err))
+      .finally(() => setSearching(false));
+  }, [userProfile?.uid]);
+
+  const handleInputChange = (val: string) => {
+    setSearchTerm(val);
+    if (!val.trim() && userProfile?.uid) {
+      searchUsers('', userProfile.uid).then((users) => setSearchResults(users));
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchTerm.trim() || !userProfile) return;
+    if (!userProfile) return;
     setSearching(true);
     try {
       const users = await searchUsers(searchTerm, userProfile.uid);
@@ -170,7 +186,7 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleInputChange(e.target.value)}
                   placeholder="Search by name or @username..."
                   className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E8CBD3] dark:border-[#452037] bg-white dark:bg-[#281324] text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8F1238]"
                 />
