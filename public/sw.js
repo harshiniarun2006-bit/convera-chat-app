@@ -15,13 +15,13 @@ const STATIC_ASSETS = [
 
 async function getAssetsToPrecache() {
   const assets = new Set(STATIC_ASSETS);
-  const res = await fetch('/asset-manifest.json');
+  const res = await fetch('/asset-manifest.json', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to fetch asset manifest: HTTP ${res.status}`);
   }
   const manifest = await res.json();
-  if (!manifest || !Array.isArray(manifest.assets)) {
-    throw new Error('Invalid asset manifest: missing or invalid assets array');
+  if (!manifest || manifest.buildId !== BUILD_ID || !Array.isArray(manifest.assets)) {
+    throw new Error('Invalid asset manifest: buildId mismatch or missing assets array');
   }
   manifest.assets.forEach((asset) => assets.add(asset));
   return Array.from(assets);

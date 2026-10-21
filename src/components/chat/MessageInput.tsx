@@ -29,6 +29,14 @@ interface MessageInputProps {
 
 const QUICK_EMOJIS = ['🍒', '❤️', '✨', '😊', '🔥', '👍', '🎉', '🌸'];
 
+interface ActiveRecording {
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  chunks: Blob[];
+  isDiscarded: boolean;
+  isCommitted: boolean;
+}
+
 export const MessageInput: React.FC<MessageInputProps> = ({
   conversationId,
   currentUser,
@@ -52,6 +60,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const activeStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
+  const activeRecordingRef = useRef<ActiveRecording | null>(null);
+  const isStartingRecordingRef = useRef<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -75,12 +85,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      isDiscardedRef.current = true;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try { mediaRecorderRef.current.stop(); } catch {}
+
+      const session = activeRecordingRef.current;
+      if (session) {
+        // Only mark it discarded during cleanup when it was still in progress (uncommitted)
+        if (!session.isCommitted) {
+          session.isDiscarded = true;
+          isDiscardedRef.current = true;
+          session.chunks = [];
+        }
+        if (session.recorder.state !== 'inactive') {
+          try {
+            session.recorder.stop();
+          } catch {}
+        }
       }
+
       if (activeStreamRef.current) {
         activeStreamRef.current.getTracks().forEach((track) => track.stop());
         activeStreamRef.current = null;
@@ -147,15 +169,32 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Voice Recording
   const startRecording = async () => {
+    // Prevent overlapping requests or starting while a recording or stop is in progress
+    if (isStartingRecordingRef.current || isRecording || activeRecordingRef.current) {
+      return;
+    }
+    isStartingRecordingRef.current = true;
+
     try {
+      // Ensure any dangling stream is stopped before requesting a new one
+      const priorStream = activeStreamRef.current as MediaStream | null;
+      if (priorStream) {
+        priorStream.getTracks().forEach((track) => track.stop());
+        activeStreamRef.current = null;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!isMountedRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      isDiscardedRef.current = false;
+
+      // Stop any prior stream in case one was attached during getUserMedia
+      const concurrentStream = activeStreamRef.current as MediaStream | null;
+      if (concurrentStream) {
+        concurrentStream.getTracks().forEach((track) => track.stop());
+      }
       activeStreamRef.current = stream;
-      audioChunksRef.current = [];
 
       let mimeType = '';
       const candidateTypes = [
@@ -175,22 +214,48 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
+      const session: ActiveRecording = {
+        recorder: mediaRecorder,
+        stream,
+        chunks: [],
+        isDiscarded: false,
+        isCommitted: false,
+      };
+      activeRecordingRef.current = session;
+      isDiscardedRef.current = false;
+      audioChunksRef.current = [];
+
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          session.chunks.push(event.data);
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        activeStreamRef.current = null;
-        if (isDiscardedRef.current) {
+        session.stream.getTracks().forEach((track) => track.stop());
+        if (activeStreamRef.current === session.stream) {
+          activeStreamRef.current = null;
+        }
+        if (activeRecordingRef.current === session) {
+          activeRecordingRef.current = null;
+        }
+        if (mediaRecorderRef.current === mediaRecorder) {
+          mediaRecorderRef.current = null;
+        }
+
+        if (session.isDiscarded) {
+          session.chunks = [];
           audioChunksRef.current = [];
           return;
         }
+
         const effectiveMime = mediaRecorder.mimeType || mimeType || 'audio/webm';
-        const audioBlob = new Blob(audioChunksRef.current, { type: effectiveMime });
-        if (audioChunksRef.current.length > 0) {
+        const audioBlob = new Blob(session.chunks, { type: effectiveMime });
+        session.chunks = [];
+        audioChunksRef.current = [];
+
+        if (audioBlob.size > 0) {
           await sendVoiceMessage(audioBlob, effectiveMime);
         }
       };
@@ -204,6 +269,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }, 1000);
     } catch (err) {
       console.warn('Microphone access not available or denied:', err);
+    } finally {
+      isStartingRecordingRef.current = false;
     }
   };
 
@@ -214,28 +281,39 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
     setIsRecording(false);
 
-    if (discard) {
-      isDiscardedRef.current = true;
-      audioChunksRef.current = [];
-    }
+    const session = activeRecordingRef.current;
+    if (session) {
+      if (discard) {
+        session.isDiscarded = true;
+        session.isCommitted = false;
+        session.chunks = [];
+        isDiscardedRef.current = true;
+        audioChunksRef.current = [];
+        session.stream.getTracks().forEach((track) => track.stop());
+        if (activeStreamRef.current === session.stream) {
+          activeStreamRef.current = null;
+        }
+      } else {
+        session.isCommitted = true;
+        session.isDiscarded = false;
+        isDiscardedRef.current = false;
+      }
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {}
-    }
-
-    if (discard && activeStreamRef.current) {
-      activeStreamRef.current.getTracks().forEach((track) => track.stop());
-      activeStreamRef.current = null;
+      if (session.recorder.state !== 'inactive') {
+        try {
+          session.recorder.stop();
+        } catch {}
+      }
     }
   };
 
   const sendVoiceMessage = async (blob: Blob, mimeType = 'audio/webm') => {
     if (sending || isSubmittingRef.current) return;
     isSubmittingRef.current = true;
-    setSending(true);
-    setSendError(null);
+    if (isMountedRef.current) {
+      setSending(true);
+      setSendError(null);
+    }
 
     const ext = mimeType.includes('mp4') || mimeType.includes('aac') ? 'm4a' : 'webm';
     try {
@@ -246,7 +324,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         audioDuration: recordingSeconds || 1,
         replyTo: replyTo || undefined
       });
-      onCancelReply();
+      if (isMountedRef.current) {
+        onCancelReply();
+      }
     } catch (err: any) {
       console.error('Failed to send voice message:', err);
       let msg = err?.message || 'Failed to send voice message.';
@@ -254,10 +334,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         const parsed = JSON.parse(msg);
         if (parsed?.error) msg = parsed.error;
       } catch {}
-      setSendError(msg);
+      if (isMountedRef.current) {
+        setSendError(msg);
+      }
     } finally {
       isSubmittingRef.current = false;
-      setSending(false);
+      if (isMountedRef.current) {
+        setSending(false);
+      }
     }
   };
 

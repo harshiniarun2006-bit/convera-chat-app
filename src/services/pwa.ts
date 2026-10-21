@@ -74,6 +74,7 @@ export function usePWAInstall() {
       const promptEvent = deferredPrompt;
       deferredPrompt = null;
       setCanInstall(false);
+      listeners.forEach((listener) => listener());
 
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
@@ -82,6 +83,7 @@ export function usePWAInstall() {
       console.error('[PWA] Install prompt error:', err);
       deferredPrompt = null;
       setCanInstall(false);
+      listeners.forEach((listener) => listener());
       return false;
     }
   };
