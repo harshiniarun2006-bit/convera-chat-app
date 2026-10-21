@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={installApp}
             className="p-2.5 rounded-full text-[#8F1238] dark:text-[#FFA4B8] bg-[#FCECF0] dark:bg-[#33182A] hover:scale-110 shadow-xs transition-all animate-pulse"
-            title="Install Convera App"
+            title="Install Convora App"
           >
             <Download className="w-5 h-5" />
           </button>

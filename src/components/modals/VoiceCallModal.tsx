@@ -98,7 +98,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         </div>
 
         <h3 className="text-xl font-bold text-white mb-1">
-          {partner?.displayName || 'Convera Call'}
+          {partner?.displayName || 'Convora Call'}
         </h3>
         <p className="text-xs text-[#F7DCE3]/70 font-medium mb-4">
           @{partner?.username || 'user'}

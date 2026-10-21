@@ -1,5 +1,5 @@
 const BUILD_ID = 'dev';
-const CACHE_NAME = `convera-cache-${BUILD_ID}`;
+const CACHE_NAME = `convora-cache-${BUILD_ID}`;
 
 const STATIC_ASSETS = [
   '/',

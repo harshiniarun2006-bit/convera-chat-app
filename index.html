@@ -12,14 +12,14 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Convera" />
-    <meta name="application-name" content="Convera" />
+    <meta name="apple-mobile-web-app-title" content="Convora" />
+    <meta name="application-name" content="Convora" />
     <meta name="theme-color" content="#8F1238" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#160B14" media="(prefers-color-scheme: dark)" />
 
-    <title>Convera — Your people, your place</title>
+    <title>Convora — Your people, your place</title>
     <meta name="description" content="Your people, your place. A real-time, modern messaging platform." />
-    <meta property="og:title" content="Convera — Your people, your place" />
+    <meta property="og:title" content="Convora — Your people, your place" />
     <meta property="og:description" content="Your people, your place. A real-time, modern messaging platform." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -29,7 +29,7 @@
     <script>
       (function() {
         try {
-          var t = localStorage.getItem('convera_theme');
+          var t = localStorage.getItem('convora_theme') || localStorage.getItem('convera_theme');
           var isDark = t === 'dark' || ((!t || t === 'system') && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (isDark) {
             document.documentElement.classList.add('dark');

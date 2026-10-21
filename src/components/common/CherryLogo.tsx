@@ -12,8 +12,8 @@ export const CherryLogo: React.FC<CherryLogoProps> = ({
   className = ''
 }) => {
   const id = useId();
-  const grad1Id = `converaGrad1_${id.replace(/[:]/g, '')}`;
-  const grad2Id = `converaGrad2_${id.replace(/[:]/g, '')}`;
+  const grad1Id = `convoraGrad1_${id.replace(/[:]/g, '')}`;
+  const grad2Id = `convoraGrad2_${id.replace(/[:]/g, '')}`;
 
   const iconSizes = {
     sm: 'w-7 h-7',
@@ -32,7 +32,7 @@ export const CherryLogo: React.FC<CherryLogoProps> = ({
   return (
     <div className={`flex items-center gap-2.5 select-none ${className}`}>
       <div className={`relative ${iconSizes[size]} flex items-center justify-center shrink-0`}>
-        {/* Convera 'C' Chat Monogram */}
+        {/* Convora 'C' Chat Monogram */}
         <svg
           viewBox="0 0 100 100"
           className="w-full h-full drop-shadow-sm transition-transform hover:scale-105 duration-300 pointer-events-none"
@@ -71,7 +71,7 @@ export const CherryLogo: React.FC<CherryLogoProps> = ({
             className={`font-extrabold tracking-tight text-[#8F1238] dark:text-[#F7DCE3] leading-none ${textSizes[size]}`}
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
-            Convera
+            Convora
           </span>
           {size === 'lg' || size === 'xl' ? (
             <span className="text-xs font-medium text-[#C52B50] dark:text-[#E04D71] tracking-wide mt-1">

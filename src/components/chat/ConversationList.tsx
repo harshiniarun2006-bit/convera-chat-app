@@ -163,7 +163,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     const isOnline = partnerLive ? isUserRecentlyActive(partnerLive.isOnline, partnerLive.lastSeen) : false;
 
     return {
-      title: partnerLive?.displayName || partnerData?.displayName || 'Convera User',
+      title: partnerLive?.displayName || partnerData?.displayName || 'Convora User',
       subtitle: partnerData?.username ? `@${partnerData.username}` : '',
       avatarUrl: partnerLive?.avatarUrl || partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry',
       isOnline

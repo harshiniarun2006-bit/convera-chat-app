@@ -1,4 +1,4 @@
-# Convera — “Your people, your place.”
+# Convora — “Your people, your place.”
 
 A real-time, cross-network messaging platform crafted with a cherry visual identity.
 
@@ -6,7 +6,7 @@ A real-time, cross-network messaging platform crafted with a cherry visual ident
 
 ## 🍒 Overview & Brand Identity
 
-- **Brand Name**: Convera
+- **Brand Name**: Convora
 - **Tagline**: *Your people, your place.*
 - **Palette**:
   - Deep Cherry: `#8F1238`
@@ -77,7 +77,7 @@ The app is protected by strict Cloud Firestore Security Rules (`firestore.rules`
 
 1. **Window 1 (or Phone / Device A)**:
    - Click **Create Account** or click **Prefill User 1 (@alex)**.
-   - Choose a password and click **Create Convera Account**.
+   - Choose a password and click **Create Convora Account**.
 2. **Window 2 (Incognito / Device B / Mobile)**:
    - Click **Create Account** or click **Prefill User 2 (@sam)**.
    - Create account and sign in.

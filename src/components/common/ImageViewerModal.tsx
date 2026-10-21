@@ -15,7 +15,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ imageUrl, on
       <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
         <a
           href={imageUrl}
-          download="convera-image.jpg"
+          download="convora-image.jpg"
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}

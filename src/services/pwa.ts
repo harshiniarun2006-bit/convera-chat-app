@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
     listeners.forEach((listener) => listener());
-    console.log('[PWA] Convera installed successfully');
+    console.log('[PWA] Convora installed successfully');
   });
 }
 

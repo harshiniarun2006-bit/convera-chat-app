@@ -1,5 +1,5 @@
 {
-  "name": "Convera",
+  "name": "Convora",
   "description": "Your people, your place. A real-time, cherry-themed messaging platform.",
   "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

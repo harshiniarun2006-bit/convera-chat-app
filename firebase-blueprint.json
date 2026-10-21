@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Public profile details for a registered Convera user",
+      "description": "Public profile details for a registered Convora user",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
@@ -106,7 +106,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "UserProfile" },
-      "description": "Public profiles of all Convera users for discovery and presence"
+      "description": "Public profiles of all Convora users for discovery and presence"
     },
     "/users/{userId}/private/settings": {
       "schema": { "$ref": "UserSettings" },

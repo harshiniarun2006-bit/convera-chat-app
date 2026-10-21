@@ -64,14 +64,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsDark(darkActive);
 
     try {
-      localStorage.setItem('convera_theme', activeTheme);
+      localStorage.setItem('convora_theme', activeTheme);
     } catch {}
   };
 
   useEffect(() => {
     // Initial theme setup from localStorage immediately
     try {
-      const savedTheme = localStorage.getItem('convera_theme') as 'light' | 'dark' | 'system' | null;
+      const savedTheme = (localStorage.getItem('convora_theme') || localStorage.getItem('convera_theme')) as 'light' | 'dark' | 'system' | null;
       if (savedTheme) {
         applyTheme(savedTheme);
       }

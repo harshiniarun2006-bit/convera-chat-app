@@ -173,12 +173,12 @@ export const AuthModal: React.FC = () => {
     setProviderDisabled(false);
     setError(null);
     if (userNum === 1) {
-      setEmail('user1@convera.chat');
+      setEmail('user1@convora.chat');
       setPassword('Password123!');
       setDisplayName('Alex Cherry');
       handleUsernameChange('alex');
     } else {
-      setEmail('user2@convera.chat');
+      setEmail('user2@convora.chat');
       setPassword('Password123!');
       setDisplayName('Sam Blossom');
       handleUsernameChange('sam');
@@ -417,12 +417,12 @@ export const AuthModal: React.FC = () => {
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : mode === 'signin' ? (
               <>
-                Sign In to Convera
+                Sign In to Convora
                 <ArrowRight className="w-4 h-4" />
               </>
             ) : mode === 'signup' ? (
               <>
-                Create Convera Account
+                Create Convora Account
                 <Sparkles className="w-4 h-4" />
               </>
             ) : (

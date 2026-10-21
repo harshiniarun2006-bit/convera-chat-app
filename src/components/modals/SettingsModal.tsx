@@ -35,7 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   React.useEffect(() => {
     try {
-      const stored = (localStorage.getItem('convera_theme') as 'light' | 'dark' | 'system' | null) || userSettings?.theme || 'light';
+      const stored = (localStorage.getItem('convora_theme') as 'light' | 'dark' | 'system' | null) || (localStorage.getItem('convera_theme') as 'light' | 'dark' | 'system' | null) || userSettings?.theme || 'light';
       initialThemeRef.current = stored;
     } catch {
       initialThemeRef.current = userSettings?.theme || 'light';
@@ -212,7 +212,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               {/* Username (read-only for identity preservation) */}
               <div>
                 <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-300 uppercase tracking-wider mb-1.5">
-                  Convera Username
+                  Convora Username
                 </label>
                 <input
                   type="text"
@@ -345,7 +345,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               </div>
 
               <div className="pt-4 border-t border-[#F7DCE3] dark:border-[#381B2D] text-xs text-zinc-500 space-y-1">
-                <p className="font-semibold text-zinc-700 dark:text-zinc-300">Convera Security:</p>
+                <p className="font-semibold text-zinc-700 dark:text-zinc-300">Convora Security:</p>
                 <p>All database queries and mutations are secured via Cloud Firestore Attribute-Based Access Control (ABAC) rules. Unauthorized devices cannot access private conversations.</p>
               </div>
             </div>

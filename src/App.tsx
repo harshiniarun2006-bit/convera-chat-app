@@ -33,7 +33,7 @@ function ChatDashboard() {
           <CherryLogo size="xl" showText={true} />
           <div className="flex items-center gap-2 mt-4 text-xs font-semibold text-[#8F1238] dark:text-[#E04D71]">
             <span className="w-2 h-2 rounded-full bg-[#C52B50] animate-ping" />
-            Connecting to Convera network...
+            Connecting to Convora network...
           </div>
         </div>
       </div>
@@ -103,7 +103,7 @@ function ChatDashboard() {
               <div className="max-w-md flex flex-col items-center z-10">
                 <CherryLogo size="xl" showText={false} className="mb-4" />
                 <h2 className="text-3xl font-extrabold text-[#5C102A] dark:text-[#F7DCE3] tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                  Convera
+                  Convora
                 </h2>
                 <p className="text-sm font-semibold text-[#8F1238] dark:text-[#E04D71] mt-1 mb-3">
                   Your people, your place.
@@ -137,7 +137,7 @@ function ChatDashboard() {
                       className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#FF4B72] to-[#8F1238] text-xs font-bold text-white shadow-md shadow-[#8F1238]/20 hover:scale-105 active:scale-95 transition-all"
                     >
                       <Download className="w-4 h-4" />
-                      Install Convera App
+                      Install Convora App
                     </button>
                   )}
                 </div>

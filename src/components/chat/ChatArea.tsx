@@ -231,7 +231,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const title = isGroup
     ? conversation.name || 'Group Chat'
-    : partnerProfile?.displayName || partnerData?.displayName || 'Convera User';
+    : partnerProfile?.displayName || partnerData?.displayName || 'Convora User';
 
   const subtitle = isGroup
     ? `${conversation.participantIds.length} members`

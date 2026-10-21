@@ -125,7 +125,7 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
               <div>
                 <div className="flex items-center justify-center gap-2">
                   <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">
-                    {conversation.name || 'Convera Chat'}
+                    {conversation.name || 'Convora Chat'}
                   </h3>
                   {conversation.type === 'group' && isAdmin && (
                     <button

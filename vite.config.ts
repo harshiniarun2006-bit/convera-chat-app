@@ -50,7 +50,7 @@ function pwaPlugin() {
         );
         swContent = swContent.replace(
           /const CACHE_NAME = ['"`][^'"`]*['"`];/,
-          `const CACHE_NAME = 'convera-cache-${buildId}';`
+          `const CACHE_NAME = 'convora-cache-${buildId}';`
         );
         fs.writeFileSync(swDistPath, swContent, 'utf-8');
       }

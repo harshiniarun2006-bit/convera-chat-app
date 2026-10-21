@@ -90,7 +90,7 @@ export class P2PChatSession {
       this.pc = new RTCPeerConnection(ICE_SERVERS);
 
       // Pre-negotiated data channel on channel id 0
-      this.dataChannel = this.pc.createDataChannel('convera_p2p_chat', {
+      this.dataChannel = this.pc.createDataChannel('convora_p2p_chat', {
         negotiated: true,
         id: 0
       });

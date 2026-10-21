@@ -157,7 +157,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
               <Loader2 className="w-7 h-7 animate-spin text-[#8F1238] dark:text-[#E04D71] mb-2" />
-              <p className="text-xs">Searching Convera network...</p>
+              <p className="text-xs">Searching Convora network...</p>
             </div>
           ) : results.length > 0 ? (
             results.map((u) => (
@@ -220,7 +220,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 <Sparkles className="w-6 h-6" />
               </div>
               <h4 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                Connect with anyone on Convera
+                Connect with anyone on Convora
               </h4>
               <p className="text-xs max-w-xs mt-1 text-zinc-500">
                 Search for friends, colleagues, or family across any device or location.

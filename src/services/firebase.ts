@@ -163,7 +163,7 @@ export async function createUserAccount(
     username,
     usernameLower: username.toLowerCase(),
     avatarUrl: `https://api.dicebear.com/7.x/shapes/svg?seed=${username}&backgroundColor=8f1238,c52b50,f7dce3`,
-    bio: 'Hey there! I am using Convera 🍒',
+    bio: 'Hey there! I am using Convora 🍒',
     isOnline: true,
     lastSeen: serverTimestamp(),
     createdAt: serverTimestamp()
@@ -235,13 +235,13 @@ export function isUserRecentlyActive(isOnline?: boolean, lastSeen?: any): boolea
 export async function authenticateTestUser(userNum: 1 | 2): Promise<FirebaseUser> {
   const credentials = userNum === 1
     ? {
-        email: 'user1@convera.chat',
+        email: 'user1@convora.chat',
         password: 'Password123!',
         displayName: 'Alex Cherry',
         username: 'alex'
       }
     : {
-        email: 'user2@convera.chat',
+        email: 'user2@convora.chat',
         password: 'Password123!',
         displayName: 'Sam Blossom',
         username: 'sam'
@@ -306,12 +306,12 @@ export async function signInWithGoogleAccount(): Promise<FirebaseUser> {
 
     const profile: UserProfile = {
       uid: user.uid,
-      displayName: user.displayName || 'Convera User',
-      displayNameLower: (user.displayName || 'Convera User').toLowerCase(),
+      displayName: user.displayName || 'Convora User',
+      displayNameLower: (user.displayName || 'Convora User').toLowerCase(),
       username: uniqueUsername,
       usernameLower: uniqueUsername.toLowerCase(),
       avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${uniqueUsername}&backgroundColor=8f1238,c52b50,f7dce3`,
-      bio: 'Hey there! I am using Convera 🍒',
+      bio: 'Hey there! I am using Convora 🍒',
       isOnline: true,
       lastSeen: serverTimestamp(),
       createdAt: serverTimestamp()
@@ -537,13 +537,13 @@ export async function getOrCreateDirectConversation(
       const participantData: Record<string, ParticipantData> = {
         [currentUid]: {
           uid: currentUid,
-          displayName: currentUser.displayName || 'Convera User',
+          displayName: currentUser.displayName || 'Convora User',
           username: currentUser.username || 'user',
           avatarUrl: currentUser.avatarUrl || ''
         },
         [targetUser.uid]: {
           uid: targetUser.uid,
-          displayName: targetUser.displayName || 'Convera User',
+          displayName: targetUser.displayName || 'Convora User',
           username: targetUser.username || 'user',
           avatarUrl: targetUser.avatarUrl || ''
         }
@@ -637,7 +637,7 @@ export async function createGroupChat(
       id: msgDocRef.id,
       conversationId,
       senderId: currentUid,
-      senderName: 'Convera',
+      senderName: 'Convora',
       type: 'system',
       text: `${currentUser.displayName || 'Admin'} created group "${name}"`,
       createdAt: serverTimestamp()
@@ -958,7 +958,7 @@ export async function leaveGroup(
         id: msgDocRef.id,
         conversationId,
         senderId: user.uid,
-        senderName: 'Convera',
+        senderName: 'Convora',
         type: 'system',
         text: `${user.displayName} left the group`,
         createdAt: serverTimestamp()
