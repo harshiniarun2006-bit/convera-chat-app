@@ -130,6 +130,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         }
       });
       setTypingUsers(activeTypers);
+    }, (error) => {
+      console.warn('Typing subscription notice:', error);
     });
 
     return () => unsubscribeTyping();

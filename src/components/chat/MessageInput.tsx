@@ -49,6 +49,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const activeStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
 
@@ -57,6 +58,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const typingTimeoutRef = useRef<any>(null);
   const isSubmittingRef = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(true);
+  const isDiscardedRef = useRef<boolean>(false);
 
   // Reset local states cleanly if conversation changes
   useEffect(() => {
@@ -67,13 +70,32 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     isSubmittingRef.current = false;
   }, [conversationId]);
 
-  // Clean up timers on unmount
+  // Clean up timers, streams, and recorder on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
+      isDiscardedRef.current = true;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => track.stop());
+        activeStreamRef.current = null;
+      }
     };
   }, []);
+
+  // Clean up file preview URL on change / unmount
+  useEffect(() => {
+    return () => {
+      if (filePreviewUrl) {
+        URL.revokeObjectURL(filePreviewUrl);
+      }
+    };
+  }, [filePreviewUrl]);
 
   // Typing status trigger
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -127,6 +149,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isMountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      isDiscardedRef.current = false;
+      activeStreamRef.current = stream;
       audioChunksRef.current = [];
 
       let mimeType = '';
@@ -155,6 +183,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
+        activeStreamRef.current = null;
+        if (isDiscardedRef.current) {
+          audioChunksRef.current = [];
+          return;
+        }
         const effectiveMime = mediaRecorder.mimeType || mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: effectiveMime });
         if (audioChunksRef.current.length > 0) {
@@ -175,18 +208,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const stopRecording = (discard = false) => {
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
     setIsRecording(false);
 
     if (discard) {
+      isDiscardedRef.current = true;
       audioChunksRef.current = [];
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
         mediaRecorderRef.current.stop();
-      }
-    } else {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
+      } catch {}
+    }
+
+    if (discard && activeStreamRef.current) {
+      activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      activeStreamRef.current = null;
     }
   };
 

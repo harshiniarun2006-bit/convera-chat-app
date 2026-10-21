@@ -96,11 +96,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           // Listen to real-time updates for user profile
           const profileDocRef = doc(db, 'users', user.uid);
-          unsubscribeProfile = onSnapshot(profileDocRef, (snap) => {
-            if (snap.exists()) {
-              setUserProfile(snap.data() as UserProfile);
+          unsubscribeProfile = onSnapshot(
+            profileDocRef,
+            (snap) => {
+              if (snap.exists()) {
+                setUserProfile(snap.data() as UserProfile);
+              }
+            },
+            (error) => {
+              console.warn('Profile subscription notice:', error);
             }
-          });
+          );
 
           // Fetch settings & apply theme
           const settings = await getUserSettings(user.uid);

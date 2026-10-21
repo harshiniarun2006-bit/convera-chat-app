@@ -71,17 +71,19 @@ export function usePWAInstall() {
     }
 
     try {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
-        deferredPrompt = null;
-        setCanInstall(false);
-        return true;
-      }
+      const promptEvent = deferredPrompt;
+      deferredPrompt = null;
+      setCanInstall(false);
+
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      return choice.outcome === 'accepted';
     } catch (err) {
       console.error('[PWA] Install prompt error:', err);
+      deferredPrompt = null;
+      setCanInstall(false);
+      return false;
     }
-    return false;
   };
 
   return { canInstall, isInstalled, installApp };

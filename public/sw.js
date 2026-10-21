@@ -1,4 +1,5 @@
-const CACHE_NAME = 'convera-cache-v1';
+const BUILD_ID = 'dev';
+const CACHE_NAME = `convera-cache-${BUILD_ID}`;
 
 const STATIC_ASSETS = [
   '/',
@@ -12,14 +13,33 @@ const STATIC_ASSETS = [
   '/icons/apple-touch-icon.png'
 ];
 
-// Install: pre-cache static assets
+async function getAssetsToPrecache() {
+  const assets = new Set(STATIC_ASSETS);
+  const res = await fetch('/asset-manifest.json');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch asset manifest: HTTP ${res.status}`);
+  }
+  const manifest = await res.json();
+  if (!manifest || !Array.isArray(manifest.assets)) {
+    throw new Error('Invalid asset manifest: missing or invalid assets array');
+  }
+  manifest.assets.forEach((asset) => assets.add(asset));
+  return Array.from(assets);
+}
+
+// Install: pre-cache static assets and production bundles
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[PWA SW] Pre-cache warning:', err);
-      });
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(async (cache) => {
+        const assets = await getAssetsToPrecache();
+        return cache.addAll(assets);
+      })
+      .catch((err) => {
+        console.warn('[PWA SW] Pre-cache failed:', err);
+        throw err;
+      })
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -43,12 +63,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Bypass caching for non-GET and third-party APIs (Firebase, Google APIs)
+  // Bypass caching for non-GET and third-party backend APIs (Firebase, Google APIs)
   if (
     request.method !== 'GET' ||
     url.hostname.includes('googleapis.com') ||
-    url.hostname.includes('firebaseio.com') ||
-    url.hostname.includes('firebase')
+    url.hostname.includes('firebaseio.com')
   ) {
     return;
   }

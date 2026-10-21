@@ -151,44 +151,56 @@ export class P2PChatSession {
         });
 
         // Listen for remote answer
-        const unsubAnswer = onSnapshot(answerDocRef, async (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data?.from === this.remoteUserId && this.pc && !this.pc.currentRemoteDescription) {
-              const remoteDesc = new RTCSessionDescription({
-                type: data.type,
-                sdp: data.sdp
-              });
-              await this.pc.setRemoteDescription(remoteDesc).catch(() => {});
+        const unsubAnswer = onSnapshot(
+          answerDocRef,
+          async (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data?.from === this.remoteUserId && this.pc && !this.pc.currentRemoteDescription) {
+                const remoteDesc = new RTCSessionDescription({
+                  type: data.type,
+                  sdp: data.sdp
+                });
+                await this.pc.setRemoteDescription(remoteDesc).catch(() => {});
+              }
             }
+          },
+          (err) => {
+            console.warn('[P2P WebRTC] Answer listener notice:', err);
           }
-        });
+        );
         this.unsubs.push(unsubAnswer);
 
       } else {
         // Callee: listen for SDP Offer
-        const unsubOffer = onSnapshot(offerDocRef, async (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data?.from === this.remoteUserId && this.pc && !this.pc.currentRemoteDescription) {
-              const remoteDesc = new RTCSessionDescription({
-                type: data.type,
-                sdp: data.sdp
-              });
-              await this.pc.setRemoteDescription(remoteDesc).catch(() => {});
+        const unsubOffer = onSnapshot(
+          offerDocRef,
+          async (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data?.from === this.remoteUserId && this.pc && !this.pc.currentRemoteDescription) {
+                const remoteDesc = new RTCSessionDescription({
+                  type: data.type,
+                  sdp: data.sdp
+                });
+                await this.pc.setRemoteDescription(remoteDesc).catch(() => {});
 
-              const answer = await this.pc.createAnswer();
-              await this.pc.setLocalDescription(answer);
+                const answer = await this.pc.createAnswer();
+                await this.pc.setLocalDescription(answer);
 
-              await setDoc(answerDocRef, {
-                sdp: answer.sdp,
-                type: answer.type,
-                from: this.currentUserId,
-                createdAt: Date.now()
-              });
+                await setDoc(answerDocRef, {
+                  sdp: answer.sdp,
+                  type: answer.type,
+                  from: this.currentUserId,
+                  createdAt: Date.now()
+                });
+              }
             }
+          },
+          (err) => {
+            console.warn('[P2P WebRTC] Offer listener notice:', err);
           }
-        });
+        );
         this.unsubs.push(unsubOffer);
       }
 
@@ -201,17 +213,23 @@ export class P2PChatSession {
         `${this.remoteUserId}_candidates`
       );
 
-      const unsubCandidates = onSnapshot(remoteCandidateRef, (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          const candidates: any[] = data?.candidates || [];
-          candidates.forEach((cand) => {
-            if (this.pc && this.pc.remoteDescription) {
-              this.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
-            }
-          });
+      const unsubCandidates = onSnapshot(
+        remoteCandidateRef,
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            const candidates: any[] = data?.candidates || [];
+            candidates.forEach((cand) => {
+              if (this.pc && this.pc.remoteDescription) {
+                this.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              }
+            });
+          }
+        },
+        (err) => {
+          console.warn('[P2P WebRTC] Candidate listener notice:', err);
         }
-      });
+      );
       this.unsubs.push(unsubCandidates);
 
     } catch (err) {
