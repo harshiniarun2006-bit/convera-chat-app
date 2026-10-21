@@ -14,7 +14,8 @@ import { NewChatModal } from './components/modals/NewChatModal';
 import { NewGroupModal } from './components/modals/NewGroupModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { CherryLogo } from './components/common/CherryLogo';
-import { MessageSquare, UserPlus, Users, Sparkles, Shield, Wifi } from 'lucide-react';
+import { MessageSquare, UserPlus, Users, Sparkles, Shield, Wifi, Download } from 'lucide-react';
+import { usePWAInstall } from './services/pwa';
 
 function ChatDashboard() {
   const { currentUser, userProfile, loading } = useAuth();
@@ -23,6 +24,7 @@ function ChatDashboard() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeView, setActiveView] = useState<'chats' | 'contacts'>('chats');
+  const { canInstall, installApp } = usePWAInstall();
 
   if (loading) {
     return (
@@ -128,6 +130,16 @@ function ChatDashboard() {
                     <Users className="w-4 h-4" />
                     Create Group
                   </button>
+                  {canInstall && (
+                    <button
+                      type="button"
+                      onClick={installApp}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#FF4B72] to-[#8F1238] text-xs font-bold text-white shadow-md shadow-[#8F1238]/20 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      Install Convera App
+                    </button>
+                  )}
                 </div>
 
                 {/* Network & Security Highlights */}

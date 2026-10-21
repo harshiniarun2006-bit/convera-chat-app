@@ -6,10 +6,12 @@ import {
   Settings,
   LogOut,
   Moon,
-  Sun
+  Sun,
+  Download
 } from 'lucide-react';
 import { CherryLogo } from '../common/CherryLogo';
 import { useAuth } from '../../context/AuthContext';
+import { usePWAInstall } from '../../services/pwa';
 
 interface SidebarProps {
   activeView: 'chats' | 'contacts';
@@ -27,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings
 }) => {
   const { userProfile, signOut, toggleTheme, isDark } = useAuth();
+  const { canInstall, installApp } = usePWAInstall();
 
   return (
     <aside className="w-18 md:w-20 bg-white dark:bg-[#160B14] border-r border-[#F7DCE3] dark:border-[#33182A] flex flex-col items-center justify-between py-5 select-none shrink-0 z-20">
@@ -72,6 +75,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Bottom User Actions */}
       <div className="flex flex-col items-center gap-3">
+        {/* PWA Install Button */}
+        {canInstall && (
+          <button
+            type="button"
+            onClick={installApp}
+            className="p-2.5 rounded-full text-[#8F1238] dark:text-[#FFA4B8] bg-[#FCECF0] dark:bg-[#33182A] hover:scale-110 shadow-xs transition-all animate-pulse"
+            title="Install Convera App"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Theme Toggle Button */}
         <button
           type="button"
