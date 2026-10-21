@@ -15,15 +15,20 @@ import {
   Users,
   Shield,
   Loader2,
-  Sparkles
+  Sparkles,
+  Wifi,
+  Activity,
+  X
 } from 'lucide-react';
 import {
   db,
   handleFirestoreError,
   OperationType,
-  markAsRead
+  markAsRead,
+  isUserRecentlyActive
 } from '../../services/firebase';
 import { Conversation, Message, ParticipantData, ReplyInfo, UserProfile } from '../../types';
+import { P2PChatSession, P2PStats } from '../../services/webrtc';
 import { useAuth } from '../../context/AuthContext';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
@@ -145,8 +150,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
+    setPartnerProfile(null);
     if (!otherUid || isGroup) {
-      setPartnerProfile(null);
       return;
     }
     const unsubPartner = onSnapshot(
@@ -154,12 +159,63 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       (snap) => {
         if (snap.exists()) {
           setPartnerProfile(snap.data() as UserProfile);
+        } else {
+          setPartnerProfile(null);
         }
       },
       (err) => console.warn('Partner profile subscription notice:', err)
     );
     return () => unsubPartner();
   }, [otherUid, isGroup]);
+
+  const [p2pStats, setP2pStats] = useState<P2PStats>({
+    state: 'disconnected',
+    rttMs: null,
+    protocol: 'WebRTC / SCTP over DTLS-UDP',
+    isP2P: false
+  });
+  const [showNetworkInfo, setShowNetworkInfo] = useState(false);
+  const p2pSessionRef = useRef<P2PChatSession | null>(null);
+
+  // Initialize WebRTC P2P direct DataChannel for 1-on-1 direct conversations
+  useEffect(() => {
+    if (isGroup || !otherUid || !currentUser) {
+      if (p2pSessionRef.current) {
+        p2pSessionRef.current.cleanup();
+        p2pSessionRef.current = null;
+      }
+      setP2pStats({
+        state: 'disconnected',
+        rttMs: null,
+        protocol: 'WebRTC / SCTP over DTLS-UDP',
+        isP2P: false
+      });
+      return;
+    }
+
+    const session = new P2PChatSession(conversationId, currentUser.uid, otherUid);
+    p2pSessionRef.current = session;
+
+    session.onStateChange = (stats) => {
+      setP2pStats(stats);
+    };
+
+    session.onDirectMessage = (directMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === directMsg.id)) return prev;
+        return [...prev, directMsg as unknown as Message];
+      });
+    };
+
+    session.start();
+
+    return () => {
+      session.cleanup();
+      if (p2pSessionRef.current === session) {
+        p2pSessionRef.current = null;
+      }
+    };
+  }, [conversationId, otherUid, currentUser?.uid, isGroup]);
 
   if (!conversation) {
     return (
@@ -169,7 +225,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     );
   }
 
-  const partnerIsOnline = !isGroup && (partnerProfile?.isOnline ?? false);
+  const partnerIsOnline = !isGroup && isUserRecentlyActive(partnerProfile?.isOnline, partnerProfile?.lastSeen);
 
   const title = isGroup
     ? conversation.name || 'Group Chat'
@@ -247,42 +303,150 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
 
-        {/* Action icons */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setShowSearch(!showSearch)}
-            className={`p-2 rounded-full transition-colors ${
-              showSearch
-                ? 'bg-[#FCECF0] dark:bg-[#341828] text-[#8F1238]'
-                : 'text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422]'
-            }`}
-            title="Search messages"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-
+        {/* Action icons & P2P Telemetry Badge */}
+        <div className="flex items-center gap-2">
           {!isGroup && (
             <button
               type="button"
-              onClick={() => setShowVoiceCall(true)}
-              className="p-2 rounded-full text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422] transition-colors"
-              title="Voice call"
+              onClick={() => setShowNetworkInfo(!showNetworkInfo)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all border shadow-xs ${
+                p2pStats.state === 'connected'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100'
+                  : p2pStats.state === 'connecting'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                  : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 border-zinc-200 dark:border-zinc-700'
+              }`}
+              title="Click to view Computer Networks P2P Telemetry (WebRTC, SCTP, STUN, RTT)"
             >
-              <Phone className="w-4 h-4" />
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  p2pStats.state === 'connected'
+                    ? 'bg-emerald-500 animate-pulse'
+                    : p2pStats.state === 'connecting'
+                    ? 'bg-amber-500 animate-ping'
+                    : 'bg-zinc-400'
+                }`}
+              />
+              <span className="font-semibold text-[11px]">
+                {p2pStats.state === 'connected'
+                  ? 'P2P Direct'
+                  : p2pStats.state === 'connecting'
+                  ? 'P2P Signaling'
+                  : 'Cloud Relayed'}
+              </span>
+              {p2pStats.rttMs !== null && (
+                <span className="font-mono text-[10px] opacity-80">
+                  {p2pStats.rttMs}ms
+                </span>
+              )}
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setShowDetails(true)}
-            className="p-2 rounded-full text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422] transition-colors"
-            title="Conversation info"
-          >
-            <Info className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowSearch(!showSearch)}
+              className={`p-2 rounded-full transition-colors ${
+                showSearch
+                  ? 'bg-[#FCECF0] dark:bg-[#341828] text-[#8F1238]'
+                  : 'text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422]'
+              }`}
+              title="Search messages"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            {!isGroup && (
+              <button
+                type="button"
+                onClick={() => setShowVoiceCall(true)}
+                className="p-2 rounded-full text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422] transition-colors"
+                title="Voice call"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowDetails(true)}
+              className="p-2 rounded-full text-zinc-500 hover:text-[#8F1238] dark:hover:text-[#F7DCE3] hover:bg-white dark:hover:bg-[#251422] transition-colors"
+              title="Conversation info"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* P2P Network Telemetry Panel */}
+      {showNetworkInfo && (
+        <div className="px-4 py-3 bg-[#FFF9F7] dark:bg-[#1E111C] border-b border-[#F7DCE3] dark:border-[#381B2D] text-xs animate-in slide-in-from-top-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 font-bold text-[#5C102A] dark:text-[#F7DCE3]">
+              <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Computer Networks — P2P Telemetry & Architecture</span>
+            </div>
+            <button
+              onClick={() => setShowNetworkInfo(false)}
+              className="text-zinc-400 hover:text-zinc-600 p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div className="p-2.5 rounded-2xl bg-white dark:bg-[#281324] border border-[#F7DCE3] dark:border-[#381B2D]">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+                Architecture
+              </div>
+              <div className="font-bold text-xs mt-1 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {p2pStats.state === 'connected' ? 'Pure P2P Channel' : 'Hybrid Signaling'}
+              </div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">
+                {p2pStats.state === 'connected' ? 'Direct browser-to-browser' : 'Relayed via Cloud Pub/Sub'}
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-white dark:bg-[#281324] border border-[#F7DCE3] dark:border-[#381B2D]">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+                Transport Layer
+              </div>
+              <div className="font-bold text-xs mt-1 text-zinc-800 dark:text-zinc-200">
+                SCTP over DTLS / UDP
+              </div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">
+                Encrypted WebRTC DataChannel
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-white dark:bg-[#281324] border border-[#F7DCE3] dark:border-[#381B2D]">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+                NAT Traversal
+              </div>
+              <div className="font-bold text-xs mt-1 text-zinc-800 dark:text-zinc-200 truncate">
+                Google STUN :19302
+              </div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">
+                ICE Candidate Exchange
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-white dark:bg-[#281324] border border-[#F7DCE3] dark:border-[#381B2D]">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+                Live RTT Latency
+              </div>
+              <div className="font-bold text-xs mt-1 font-mono text-[#8F1238] dark:text-[#E04D71]">
+                {p2pStats.rttMs !== null ? `${p2pStats.rttMs} ms` : 'Measuring...'}
+              </div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">
+                Ping-pong packet delay
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* In-chat search bar */}
       {showSearch && (
@@ -358,6 +522,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           currentUser={userProfile}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
+          p2pSession={p2pSessionRef.current}
         />
       )}
 

@@ -21,6 +21,7 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
   const [description, setDescription] = useState(conversation.description || '');
   const [saving, setSaving] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   const isAdmin = conversation.adminIds?.includes(userProfile?.uid || '') || false;
   const participants = Object.values(conversation.participantData || {});
@@ -29,12 +30,14 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
     if (!userProfile) return;
     if (window.confirm(`Are you sure you want to leave "${conversation.name || 'this group'}"?`)) {
       setIsLeaving(true);
+      setLeaveError(null);
       try {
         await leaveGroup(conversation.id, userProfile);
         onClose();
         if (onLeaveConversation) onLeaveConversation();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to leave group:', err);
+        setLeaveError(err?.message || 'Failed to leave group. Please try again.');
       } finally {
         setIsLeaving(false);
       }
@@ -191,7 +194,12 @@ export const ConversationDetailsModal: React.FC<ConversationDetailsModalProps> =
 
           {/* Group Actions */}
           {conversation.type === 'group' && userProfile && (
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
+              {leaveError && (
+                <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs">
+                  {leaveError}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleLeaveGroup}

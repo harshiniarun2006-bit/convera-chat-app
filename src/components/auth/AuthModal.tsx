@@ -24,6 +24,7 @@ export const AuthModal: React.FC = () => {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [providerDisabled, setProviderDisabled] = useState(false);
   const checkTimeoutRef = React.useRef<any>(null);
+  const usernameRequestIdRef = React.useRef<number>(0);
 
   const handleUsernameChange = (val: string) => {
     const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
@@ -31,20 +32,27 @@ export const AuthModal: React.FC = () => {
 
     if (checkTimeoutRef.current) {
       clearTimeout(checkTimeoutRef.current);
+      checkTimeoutRef.current = null;
     }
 
     if (clean.length < 2) {
+      usernameRequestIdRef.current++;
       setUsernameStatus('idle');
       return;
     }
 
     setUsernameStatus('checking');
+    const currentReq = ++usernameRequestIdRef.current;
     checkTimeoutRef.current = setTimeout(async () => {
       try {
         const isAvailable = await checkUsernameAvailable(clean);
-        setUsernameStatus(isAvailable ? 'available' : 'taken');
+        if (usernameRequestIdRef.current === currentReq) {
+          setUsernameStatus(isAvailable ? 'available' : 'taken');
+        }
       } catch {
-        setUsernameStatus('idle');
+        if (usernameRequestIdRef.current === currentReq) {
+          setUsernameStatus('idle');
+        }
       }
     }, 350);
   };
@@ -59,7 +67,29 @@ export const AuthModal: React.FC = () => {
     try {
       if (mode === 'signup') {
         if (!displayName.trim()) throw new Error('Please enter your name.');
-        if (usernameStatus === 'taken') throw new Error('This username is already taken.');
+        if (!username || username.length < 2) throw new Error('Please enter a username of at least 2 characters.');
+
+        // Cancel any pending debounced check and check availability directly
+        if (checkTimeoutRef.current) {
+          clearTimeout(checkTimeoutRef.current);
+          checkTimeoutRef.current = null;
+        }
+
+        if (usernameStatus === 'taken') {
+          throw new Error('This username is already taken.');
+        }
+
+        // If status is still checking or unverified, wait for direct availability check
+        if (usernameStatus !== 'available') {
+          setUsernameStatus('checking');
+          const isAvailable = await checkUsernameAvailable(username);
+          if (!isAvailable) {
+            setUsernameStatus('taken');
+            throw new Error('This username is already taken. Please choose another.');
+          }
+          setUsernameStatus('available');
+        }
+
         if (password.length < 6) throw new Error('Password must be at least 6 characters.');
 
         await createUserAccount(email, password, displayName, username);

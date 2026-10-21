@@ -13,6 +13,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateSettingsState: (settings: Partial<UserSettings>) => void;
   toggleTheme: () => Promise<void>;
+  isDark: boolean;
+  applyTheme: (theme?: 'light' | 'dark' | 'system') => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +26,8 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   updateSettingsState: () => {},
   toggleTheme: async () => {},
+  isDark: false,
+  applyTheme: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -34,22 +38,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
 
   const applyTheme = (theme?: 'light' | 'dark' | 'system') => {
     const activeTheme = theme || 'light';
-    const isDark =
+    const darkActive =
       activeTheme === 'dark' ||
-      (activeTheme === 'system' &&
+      ((!theme || activeTheme === 'system') &&
         typeof window !== 'undefined' &&
         window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    if (isDark) {
+    if (darkActive) {
       document.documentElement.classList.add('dark');
       document.documentElement.setAttribute('data-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.setAttribute('data-theme', 'light');
     }
+
+    setIsDark(darkActive);
 
     try {
       localStorage.setItem('convera_theme', activeTheme);
@@ -223,7 +235,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         signOut: handleSignOut,
         updateSettingsState,
-        toggleTheme
+        toggleTheme,
+        isDark,
+        applyTheme
       }}
     >
       {children}

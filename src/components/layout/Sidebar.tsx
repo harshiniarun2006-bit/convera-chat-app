@@ -26,8 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewGroup,
   onOpenSettings
 }) => {
-  const { userProfile, signOut, userSettings, toggleTheme } = useAuth();
-  const isDark = userSettings?.theme === 'dark' || (!userSettings?.theme && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const { userProfile, signOut, toggleTheme, isDark } = useAuth();
 
   return (
     <aside className="w-18 md:w-20 bg-white dark:bg-[#160B14] border-r border-[#F7DCE3] dark:border-[#33182A] flex flex-col items-center justify-between py-5 select-none shrink-0 z-20">

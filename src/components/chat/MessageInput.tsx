@@ -17,12 +17,14 @@ import {
   uploadMediaFile,
   setTypingStatus
 } from '../../services/firebase';
+import { P2PChatSession } from '../../services/webrtc';
 
 interface MessageInputProps {
   conversationId: string;
   currentUser: UserProfile;
   replyTo: ReplyInfo | null;
   onCancelReply: () => void;
+  p2pSession?: P2PChatSession | null;
 }
 
 const QUICK_EMOJIS = ['🍒', '❤️', '✨', '😊', '🔥', '👍', '🎉', '🌸'];
@@ -31,7 +33,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   conversationId,
   currentUser,
   replyTo,
-  onCancelReply
+  onCancelReply,
+  p2pSession
 }) => {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -245,13 +248,36 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         );
       }
 
+      const isP2P = p2pSession?.state === 'connected';
+      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      if (isP2P && p2pSession) {
+        p2pSession.sendDirectMessage({
+          id: msgId,
+          conversationId,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.avatarUrl,
+          type,
+          text: trimmed,
+          mediaUrl,
+          fileName: pendingFile?.name,
+          fileSize: pendingFile?.size,
+          replyTo: replyTo || undefined,
+          createdAt: new Date().toISOString(),
+          isP2P: true
+        });
+      }
+
       await sendMessage(conversationId, currentUser, {
         type,
         text: trimmed,
         mediaUrl,
         fileName: pendingFile?.name,
         fileSize: pendingFile?.size,
-        replyTo: replyTo || undefined
+        replyTo: replyTo || undefined,
+        isP2P,
+        customId: msgId
       });
 
       // Clear input states only upon successful delivery

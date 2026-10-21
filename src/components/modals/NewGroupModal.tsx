@@ -22,34 +22,62 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const searchRequestIdRef = React.useRef(0);
 
   React.useEffect(() => {
     if (!userProfile?.uid) return;
+    const reqId = ++searchRequestIdRef.current;
     setSearching(true);
     searchUsers('', userProfile.uid)
-      .then((users) => setSearchResults(users))
+      .then((users) => {
+        if (searchRequestIdRef.current === reqId) {
+          setSearchResults(users);
+        }
+      })
       .catch((err) => console.warn('Group members directory fetch notice:', err))
-      .finally(() => setSearching(false));
+      .finally(() => {
+        if (searchRequestIdRef.current === reqId) {
+          setSearching(false);
+        }
+      });
   }, [userProfile?.uid]);
 
   const handleInputChange = (val: string) => {
     setSearchTerm(val);
     if (!val.trim() && userProfile?.uid) {
-      searchUsers('', userProfile.uid).then((users) => setSearchResults(users));
+      const reqId = ++searchRequestIdRef.current;
+      setSearching(true);
+      searchUsers('', userProfile.uid)
+        .then((users) => {
+          if (searchRequestIdRef.current === reqId) {
+            setSearchResults(users);
+          }
+        })
+        .catch((err) => console.warn('Group members directory fetch notice:', err))
+        .finally(() => {
+          if (searchRequestIdRef.current === reqId) {
+            setSearching(false);
+          }
+        });
     }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
+    const reqId = ++searchRequestIdRef.current;
     setSearching(true);
     try {
       const users = await searchUsers(searchTerm, userProfile.uid);
-      setSearchResults(users);
+      if (searchRequestIdRef.current === reqId) {
+        setSearchResults(users);
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setSearching(false);
+      if (searchRequestIdRef.current === reqId) {
+        setSearching(false);
+      }
     }
   };
 

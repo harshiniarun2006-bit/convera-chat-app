@@ -135,6 +135,12 @@ service cloud.firestore {
           request.auth.uid == userId &&
           isMemberOfConversation(conversationId);
       }
+
+      // Subcollection: P2P WebRTC Signaling (Offers, Answers, ICE Candidates)
+      match /p2p_signals/{signalId} {
+        allow read, write: if isValidId(conversationId) &&
+          isMemberOfConversation(conversationId);
+      }
     }
   }
 }

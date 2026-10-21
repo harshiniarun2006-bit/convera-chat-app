@@ -31,7 +31,8 @@ import {
   arrayUnion,
   arrayRemove,
   Timestamp,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import {
   getStorage,
@@ -158,7 +159,9 @@ export async function createUserAccount(
   const profile: UserProfile = {
     uid: user.uid,
     displayName: displayName.trim(),
+    displayNameLower: displayName.trim().toLowerCase(),
     username,
+    usernameLower: username.toLowerCase(),
     avatarUrl: `https://api.dicebear.com/7.x/shapes/svg?seed=${username}&backgroundColor=8f1238,c52b50,f7dce3`,
     bio: 'Hey there! I am using Convera 🍒',
     isOnline: true,
@@ -208,6 +211,25 @@ export async function signInUser(email: string, pass: string): Promise<FirebaseU
     // Ignore if first time
   }
   return userCredential.user;
+}
+
+export function isUserRecentlyActive(isOnline?: boolean, lastSeen?: any): boolean {
+  if (!isOnline || !lastSeen) return false;
+  let lastSeenMs: number | null = null;
+  if (typeof lastSeen?.toMillis === 'function') {
+    lastSeenMs = lastSeen.toMillis();
+  } else if (lastSeen instanceof Date) {
+    lastSeenMs = lastSeen.getTime();
+  } else if (typeof lastSeen === 'number') {
+    lastSeenMs = lastSeen;
+  } else if (typeof lastSeen === 'string') {
+    lastSeenMs = new Date(lastSeen).getTime();
+  } else if (lastSeen?.seconds) {
+    lastSeenMs = lastSeen.seconds * 1000;
+  }
+  if (!lastSeenMs || isNaN(lastSeenMs)) return false;
+  const TWO_MINUTES_MS = 2 * 60 * 1000;
+  return Date.now() - lastSeenMs <= TWO_MINUTES_MS;
 }
 
 export async function authenticateTestUser(userNum: 1 | 2): Promise<FirebaseUser> {
@@ -285,7 +307,9 @@ export async function signInWithGoogleAccount(): Promise<FirebaseUser> {
     const profile: UserProfile = {
       uid: user.uid,
       displayName: user.displayName || 'Convera User',
+      displayNameLower: (user.displayName || 'Convera User').toLowerCase(),
       username: uniqueUsername,
+      usernameLower: uniqueUsername.toLowerCase(),
       avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${uniqueUsername}&backgroundColor=8f1238,c52b50,f7dce3`,
       bio: 'Hey there! I am using Convera 🍒',
       isOnline: true,
@@ -356,7 +380,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     return null;
   } catch (err) {
     console.warn(`User profile fetch notice for users/${uid}:`, err);
-    return null;
+    throw err;
   }
 }
 
@@ -374,7 +398,14 @@ export async function getUserSettings(uid: string): Promise<UserSettings | null>
 
 export async function updateProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
   try {
-    await updateDoc(doc(db, 'users', uid), updates);
+    const finalUpdates: any = { ...updates };
+    if (updates.displayName) {
+      finalUpdates.displayNameLower = updates.displayName.trim().toLowerCase();
+    }
+    if (updates.username) {
+      finalUpdates.usernameLower = updates.username.trim().toLowerCase();
+    }
+    await updateDoc(doc(db, 'users', uid), finalUpdates);
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
   }
@@ -417,6 +448,7 @@ export async function searchUsers(searchTerm: string, currentUid: string): Promi
     }
 
     const cleanUsername = term.startsWith('@') ? term.slice(1) : term;
+    const upperBound = cleanUsername + '\uf8ff';
 
     // 1. Try exact username match from index
     try {
@@ -435,23 +467,36 @@ export async function searchUsers(searchTerm: string, currentUid: string): Promi
       console.warn('Username index lookup notice:', indexErr);
     }
 
-    // 2. Query users collection
+    // 2. Server-side prefix queries on normalized usernameLower and displayNameLower fields
     try {
-      const usersQuery = query(collection(db, 'users'), limit(50));
-      const snap = await getDocs(usersQuery);
-      snap.forEach((d) => {
+      const usernameQuery = query(
+        collection(db, 'users'),
+        where('usernameLower', '>=', cleanUsername),
+        where('usernameLower', '<=', upperBound),
+        limit(30)
+      );
+      const displayNameQuery = query(
+        collection(db, 'users'),
+        where('displayNameLower', '>=', cleanUsername),
+        where('displayNameLower', '<=', upperBound),
+        limit(30)
+      );
+
+      const [uSnap, dSnap] = await Promise.all([
+        getDocs(usernameQuery).catch(() => null),
+        getDocs(displayNameQuery).catch(() => null)
+      ]);
+
+      const candidateDocs = [...(uSnap?.docs || []), ...(dSnap?.docs || [])];
+      candidateDocs.forEach((d) => {
         const data = d.data() as UserProfile;
         if (data.uid && !seenUids.has(data.uid)) {
-          const uName = (data.username || '').toLowerCase();
-          const dName = (data.displayName || '').toLowerCase();
-          if (uName.includes(cleanUsername) || dName.includes(term) || dName.includes(cleanUsername)) {
-            results.push(data);
-            seenUids.add(data.uid);
-          }
+          results.push(data);
+          seenUids.add(data.uid);
         }
       });
     } catch (usersErr) {
-      console.warn('Users collection query notice:', usersErr);
+      console.warn('Users prefix search query notice:', usersErr);
     }
 
     return results;
@@ -633,6 +678,8 @@ export async function sendMessage(
     fileName?: string;
     fileSize?: number;
     audioDuration?: number;
+    isP2P?: boolean;
+    customId?: string;
     replyTo?: { messageId: string; senderName: string; text: string };
   }
 ): Promise<string> {
@@ -650,7 +697,7 @@ export async function sendMessage(
 
   const messagesColRef = collection(db, 'conversations', conversationId, 'messages');
   const convRef = doc(db, 'conversations', conversationId);
-  const messageDocRef = doc(messagesColRef);
+  const messageDocRef = messageData.customId ? doc(messagesColRef, messageData.customId) : doc(messagesColRef);
   const messageId = messageDocRef.id;
 
   // Build sanitized message payload without any undefined values
@@ -669,6 +716,7 @@ export async function sendMessage(
     reactions: {},
     isEdited: false,
     isDeleted: false,
+    isP2P: messageData.isP2P ?? false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
@@ -697,6 +745,7 @@ export async function sendMessage(
     // 2. Resiliently update conversation metadata without failing the message delivery
     try {
       await updateDoc(convRef, {
+        lastMessageId: messageId,
         lastMessageText: previewText.slice(0, 300),
         lastMessageSenderId: currentAuthUid,
         lastMessageTime: serverTimestamp(),
@@ -710,6 +759,7 @@ export async function sendMessage(
         await setDoc(
           convRef,
           {
+            lastMessageId: messageId,
             lastMessageText: previewText.slice(0, 300),
             lastMessageSenderId: currentAuthUid,
             lastMessageTime: serverTimestamp(),
@@ -799,12 +849,29 @@ export async function deleteMessage(
       updatedAt: serverTimestamp()
     });
 
-    // Update conversation preview if needed
+    // Update conversation preview only if this message is the latest message
     const convRef = doc(db, 'conversations', conversationId);
-    await updateDoc(convRef, {
-      lastMessageText: 'This message was deleted',
-      updatedAt: serverTimestamp()
-    }).catch(() => {});
+    const convSnap = await getDoc(convRef);
+    if (convSnap.exists()) {
+      const convData = convSnap.data() as Conversation;
+      let isLatest = convData.lastMessageId === messageId;
+      if (!convData.lastMessageId) {
+        const latestMsgsQuery = query(
+          collection(db, 'conversations', conversationId, 'messages'),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const latestSnap = await getDocs(latestMsgsQuery);
+        if (!latestSnap.empty && latestSnap.docs[0].id === messageId) {
+          isLatest = true;
+        }
+      }
+      if (isLatest) {
+        await updateDoc(convRef, {
+          lastMessageText: 'This message was deleted'
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `conversations/${conversationId}/messages/${messageId}`);
   }
@@ -864,47 +931,54 @@ export async function leaveGroup(
   user: UserProfile
 ): Promise<void> {
   const convRef = doc(db, 'conversations', conversationId);
-  const convSnap = await getDoc(convRef);
-  if (!convSnap.exists()) return;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const convSnap = await transaction.get(convRef);
+      if (!convSnap.exists()) return;
 
-  const conv = convSnap.data() as Conversation;
-  const remainingParticipantIds = (conv.participantIds || []).filter(id => id !== user.uid);
+      const conv = convSnap.data() as Conversation;
+      const remainingParticipantIds = (conv.participantIds || []).filter(id => id !== user.uid);
 
-  if (remainingParticipantIds.length === 0) {
-    await deleteDoc(convRef);
-    return;
+      if (remainingParticipantIds.length === 0) {
+        transaction.delete(convRef);
+        return;
+      }
+
+      const updatedParticipantData = { ...(conv.participantData || {}) };
+      delete updatedParticipantData[user.uid];
+
+      const updatedAdminIds = (conv.adminIds || []).filter(id => id !== user.uid);
+      if (updatedAdminIds.length === 0 && remainingParticipantIds.length > 0) {
+        updatedAdminIds.push(remainingParticipantIds[0]);
+      }
+
+      const msgCol = collection(db, 'conversations', conversationId, 'messages');
+      const msgDocRef = doc(msgCol);
+      transaction.set(msgDocRef, {
+        id: msgDocRef.id,
+        conversationId,
+        senderId: user.uid,
+        senderName: 'Convera',
+        type: 'system',
+        text: `${user.displayName} left the group`,
+        createdAt: serverTimestamp()
+      });
+
+      transaction.update(convRef, {
+        participantIds: remainingParticipantIds,
+        participantData: updatedParticipantData,
+        adminIds: updatedAdminIds,
+        lastMessageId: msgDocRef.id,
+        lastMessageText: `${user.displayName} left the group`,
+        lastMessageSenderId: user.uid,
+        lastMessageTime: serverTimestamp(),
+        lastMessageType: 'system',
+        updatedAt: serverTimestamp()
+      });
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `conversations/${conversationId}`);
   }
-
-  const updatedParticipantData = { ...(conv.participantData || {}) };
-  delete updatedParticipantData[user.uid];
-
-  const updatedAdminIds = (conv.adminIds || []).filter(id => id !== user.uid);
-  if (updatedAdminIds.length === 0 && remainingParticipantIds.length > 0) {
-    updatedAdminIds.push(remainingParticipantIds[0]);
-  }
-
-  await updateDoc(convRef, {
-    participantIds: remainingParticipantIds,
-    participantData: updatedParticipantData,
-    adminIds: updatedAdminIds,
-    lastMessageText: `${user.displayName} left the group`,
-    lastMessageSenderId: user.uid,
-    lastMessageTime: serverTimestamp(),
-    lastMessageType: 'system',
-    updatedAt: serverTimestamp()
-  });
-
-  const msgCol = collection(db, 'conversations', conversationId, 'messages');
-  const msgDocRef = doc(msgCol);
-  await setDoc(msgDocRef, {
-    id: msgDocRef.id,
-    conversationId,
-    senderId: user.uid,
-    senderName: 'Convera',
-    type: 'system',
-    text: `${user.displayName} left the group`,
-    createdAt: serverTimestamp()
-  });
 }
 
 export async function deleteConversation(conversationId: string): Promise<void> {
@@ -916,7 +990,7 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   }
 }
 
-// Helper to compress image to lightweight base64 Data URL under 500KB
+// Helper to compress image to lightweight base64 Data URL under 850KB
 async function compressImageToDataUrl(file: File | Blob, maxWidth = 1200, quality = 0.75): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -933,11 +1007,21 @@ async function compressImageToDataUrl(file: File | Blob, maxWidth = 1200, qualit
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(e.target?.result as string);
+          const rawUrl = e.target?.result as string;
+          if (rawUrl && rawUrl.length > 850 * 1024) {
+            reject(new Error('Image exceeds inline transfer limit (850KB). Please choose a smaller image.'));
+            return;
+          }
+          resolve(rawUrl);
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        if (dataUrl.length > 850 * 1024) {
+          reject(new Error('Image exceeds inline transfer limit (850KB). Please choose a smaller image.'));
+          return;
+        }
+        resolve(dataUrl);
       };
       img.onerror = reject;
       img.src = e.target?.result as string;
@@ -963,8 +1047,8 @@ export async function uploadMediaFile(
     if (file.type.startsWith('image/')) {
       return await compressImageToDataUrl(file);
     }
-    if (file.size > 800 * 1024) {
-      throw new Error('File exceeds transfer limit (800KB). Please upload a smaller file or check your network.');
+    if (file.size > 650 * 1024) {
+      throw new Error('File exceeds transfer limit (650KB). Please upload a smaller file or check your network.');
     }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

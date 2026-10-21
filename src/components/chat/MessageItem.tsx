@@ -227,10 +227,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
           {/* Footer: timestamp, edited badge, read receipts */}
           <div
-            className={`flex items-center justify-end gap-1 text-[10px] mt-1 select-none ${
+            className={`flex items-center justify-end gap-1.5 text-[10px] mt-1 select-none ${
               isOutgoing ? 'text-white/80' : 'text-zinc-400'
             }`}
           >
+            {message.isP2P && (
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                  isOutgoing
+                    ? 'bg-white/25 text-white shadow-xs'
+                    : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                }`}
+                title="Delivered directly peer-to-peer via WebRTC DataChannel (SCTP/UDP)"
+              >
+                P2P
+              </span>
+            )}
             {message.isEdited && !message.isDeleted && <span>(edited)</span>}
             <span>{formatTime(message.createdAt)}</span>
             {isOutgoing && (

@@ -4,7 +4,8 @@ import {
   query,
   where,
   limit,
-  onSnapshot
+  onSnapshot,
+  documentId
 } from 'firebase/firestore';
 import {
   Search,
@@ -15,7 +16,7 @@ import {
   CheckCheck,
   Check
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../../services/firebase';
+import { db, handleFirestoreError, OperationType, isUserRecentlyActive } from '../../services/firebase';
 import { Conversation, ParticipantData } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -34,7 +35,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [usersPresence, setUsersPresence] = useState<Record<string, { isOnline: boolean; displayName?: string; avatarUrl?: string }>>({});
+  const [usersPresence, setUsersPresence] = useState<Record<string, { isOnline: boolean; lastSeen?: any; displayName?: string; avatarUrl?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'group' | 'unread'>('all');
@@ -78,32 +79,72 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Real-time presence listener for participants across conversations
+  // Real-time presence listener for participants across direct conversations
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setUsersPresence({});
+      return;
+    }
 
-    const usersQuery = query(collection(db, 'users'), limit(100));
-    const unsubscribeUsers = onSnapshot(
-      usersQuery,
-      (snapshot) => {
-        const statuses: Record<string, { isOnline: boolean; displayName?: string; avatarUrl?: string }> = {};
-        snapshot.forEach((d) => {
-          const data = d.data();
-          statuses[d.id] = {
-            isOnline: !!data.isOnline,
-            displayName: data.displayName,
-            avatarUrl: data.avatarUrl
-          };
-        });
-        setUsersPresence(statuses);
-      },
-      (err) => {
-        console.warn('Users presence subscription notice:', err);
-      }
+    // Derive unique partner UIDs from direct conversations
+    const partnerUids = Array.from(
+      new Set(
+        conversations
+          .filter((c) => c.type === 'direct')
+          .map((c) => c.participantIds?.find((id) => id !== currentUser.uid))
+          .filter((id): id is string => Boolean(id))
+      )
     );
 
-    return () => unsubscribeUsers();
-  }, [currentUser]);
+    if (partnerUids.length === 0) {
+      setUsersPresence({});
+      return;
+    }
+
+    // Split into chunks of at most 30 IDs (Firestore documentId() in query limit)
+    const chunks: string[][] = [];
+    for (let i = 0; i < partnerUids.length; i += 30) {
+      chunks.push(partnerUids.slice(i, i + 30));
+    }
+
+    const chunkStatuses: Record<number, Record<string, { isOnline: boolean; lastSeen?: any; displayName?: string; avatarUrl?: string }>> = {};
+
+    const unsubscribers = chunks.map((chunk, idx) => {
+      const q = query(
+        collection(db, 'users'),
+        where(documentId(), 'in', chunk)
+      );
+
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const chunkMap: Record<string, { isOnline: boolean; lastSeen?: any; displayName?: string; avatarUrl?: string }> = {};
+          snapshot.forEach((d) => {
+            const data = d.data();
+            chunkMap[d.id] = {
+              isOnline: !!data.isOnline,
+              lastSeen: data.lastSeen,
+              displayName: data.displayName,
+              avatarUrl: data.avatarUrl
+            };
+          });
+          chunkStatuses[idx] = chunkMap;
+
+          // Merge all chunk maps
+          const merged: Record<string, { isOnline: boolean; lastSeen?: any; displayName?: string; avatarUrl?: string }> = {};
+          Object.values(chunkStatuses).forEach((m) => Object.assign(merged, m));
+          setUsersPresence(merged);
+        },
+        (err) => {
+          console.warn('Users presence chunk subscription notice:', err);
+        }
+      );
+    });
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [currentUser, conversations]);
 
   const getConversationDisplay = (conv: Conversation) => {
     if (conv.type === 'group') {
@@ -119,12 +160,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     const otherUid = conv.participantIds.find((id) => id !== currentUser?.uid);
     const partnerData = otherUid && conv.participantData ? conv.participantData[otherUid] : null;
     const partnerLive = otherUid ? usersPresence[otherUid] : null;
+    const isOnline = partnerLive ? isUserRecentlyActive(partnerLive.isOnline, partnerLive.lastSeen) : false;
 
     return {
       title: partnerLive?.displayName || partnerData?.displayName || 'Convera User',
       subtitle: partnerData?.username ? `@${partnerData.username}` : '',
       avatarUrl: partnerLive?.avatarUrl || partnerData?.avatarUrl || 'https://api.dicebear.com/7.x/shapes/svg?seed=cherry',
-      isOnline: partnerLive?.isOnline || false
+      isOnline
     };
   };
 

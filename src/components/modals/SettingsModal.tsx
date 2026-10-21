@@ -17,7 +17,7 @@ const CHERRY_AVATAR_PRESETS = [
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { userProfile, userSettings, signOut, updateSettingsState } = useAuth();
+  const { userProfile, userSettings, signOut, updateSettingsState, applyTheme } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'privacy'>('profile');
   const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
@@ -29,6 +29,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [lastSeenPrivacy, setLastSeenPrivacy] = useState<'everyone' | 'contacts' | 'nobody'>(
     userSettings?.lastSeenPrivacy || 'everyone'
   );
+
+  const initialThemeRef = React.useRef(userSettings?.theme || 'light');
+  const isSavedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    try {
+      const stored = (localStorage.getItem('convera_theme') as 'light' | 'dark' | 'system' | null) || userSettings?.theme || 'light';
+      initialThemeRef.current = stored;
+    } catch {
+      initialThemeRef.current = userSettings?.theme || 'light';
+    }
+
+    return () => {
+      if (!isSavedRef.current) {
+        applyTheme(initialThemeRef.current);
+      }
+    };
+  }, [applyTheme, userSettings?.theme]);
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -53,6 +71,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         lastSeenPrivacy
       });
 
+      isSavedRef.current = true;
+      initialThemeRef.current = theme;
+      applyTheme(theme);
       updateSettingsState({ soundEnabled, readReceipts, theme, lastSeenPrivacy });
 
       setSaveSuccess(true);
@@ -232,7 +253,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                       setTheme('light');
                       document.documentElement.classList.remove('dark');
                       document.documentElement.setAttribute('data-theme', 'light');
-                      try { localStorage.setItem('convera_theme', 'light'); } catch {}
                     }}
                     className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
                       theme === 'light'
@@ -253,7 +273,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                       setTheme('dark');
                       document.documentElement.classList.add('dark');
                       document.documentElement.setAttribute('data-theme', 'dark');
-                      try { localStorage.setItem('convera_theme', 'dark'); } catch {}
                     }}
                     className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
                       theme === 'dark'

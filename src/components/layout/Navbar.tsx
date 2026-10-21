@@ -14,8 +14,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewGroup,
   onOpenSettings
 }) => {
-  const { userProfile, userSettings, toggleTheme } = useAuth();
-  const isDark = userSettings?.theme === 'dark' || (!userSettings?.theme && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const { userProfile, toggleTheme, isDark } = useAuth();
 
   return (
     <header className="md:hidden bg-white dark:bg-[#1C0F1A] border-b border-[#F7DCE3] dark:border-[#33182A] px-4 py-2.5 flex items-center justify-between select-none shrink-0 z-20">

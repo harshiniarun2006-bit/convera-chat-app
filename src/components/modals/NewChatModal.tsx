@@ -20,40 +20,68 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [searched, setSearched] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const searchRequestIdRef = React.useRef(0);
 
   React.useEffect(() => {
     if (!userProfile?.uid) return;
+    const reqId = ++searchRequestIdRef.current;
     setLoading(true);
     searchUsers('', userProfile.uid)
       .then((users) => {
-        setResults(users);
+        if (searchRequestIdRef.current === reqId) {
+          setResults(users);
+        }
       })
       .catch((err) => console.warn('Directory fetch notice:', err))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (searchRequestIdRef.current === reqId) {
+          setLoading(false);
+        }
+      });
   }, [userProfile?.uid]);
 
   const handleInputChange = (val: string) => {
     setSearchTerm(val);
     if (!val.trim() && userProfile?.uid) {
       setSearched(false);
-      searchUsers('', userProfile.uid).then((users) => setResults(users));
+      const reqId = ++searchRequestIdRef.current;
+      setLoading(true);
+      searchUsers('', userProfile.uid)
+        .then((users) => {
+          if (searchRequestIdRef.current === reqId) {
+            setResults(users);
+          }
+        })
+        .catch((err) => console.warn('Directory fetch notice:', err))
+        .finally(() => {
+          if (searchRequestIdRef.current === reqId) {
+            setLoading(false);
+          }
+        });
     }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
+    const reqId = ++searchRequestIdRef.current;
     setLoading(true);
     setSearched(true);
     setError(null);
     try {
       const users = await searchUsers(searchTerm, userProfile.uid);
-      setResults(users);
+      if (searchRequestIdRef.current === reqId) {
+        setResults(users);
+      }
     } catch (err: any) {
-      console.error('Search error:', err);
-      setError(err?.message || 'Failed to search users');
+      if (searchRequestIdRef.current === reqId) {
+        console.error('Search error:', err);
+        setError(err?.message || 'Failed to search users');
+      }
     } finally {
-      setLoading(false);
+      if (searchRequestIdRef.current === reqId) {
+        setLoading(false);
+      }
     }
   };
 

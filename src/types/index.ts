@@ -4,6 +4,8 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   username: string;
+  displayNameLower?: string;
+  usernameLower?: string;
   avatarUrl?: string;
   bio?: string;
   isOnline?: boolean;
@@ -38,6 +40,7 @@ export interface Conversation {
   avatarUrl?: string;
   adminIds?: string[];
   createdById: string;
+  lastMessageId?: string;
   lastMessageText?: string;
   lastMessageSenderId?: string;
   lastMessageTime?: any;
@@ -71,6 +74,7 @@ export interface Message {
   reactions?: Record<string, string[]>; // emoji -> array of userIds
   isEdited?: boolean;
   isDeleted?: boolean;
+  isP2P?: boolean;
   createdAt: any;
   updatedAt?: any;
 }
