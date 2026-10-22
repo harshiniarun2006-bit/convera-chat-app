@@ -23,6 +23,8 @@ export const AuthModal: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [providerDisabled, setProviderDisabled] = useState(false);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [googleProviderDisabled, setGoogleProviderDisabled] = useState(false);
   const checkTimeoutRef = React.useRef<any>(null);
   const usernameRequestIdRef = React.useRef<number>(0);
 
@@ -156,12 +158,25 @@ export const AuthModal: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setError(null);
     setProviderDisabled(false);
+    setUnauthorizedDomain(null);
+    setGoogleProviderDisabled(false);
     setLoading(true);
     try {
       await signInWithGoogleAccount();
     } catch (err: any) {
-      if (!err.message?.includes('popup-closed-by-user')) {
-        setError(err.message || 'Google sign-in was interrupted');
+      console.error('Google sign-in error:', err);
+      const code = err?.code || '';
+      const msg = err?.message || '';
+
+      if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+        setUnauthorizedDomain(currentDomain);
+      } else if (code === 'auth/operation-not-allowed' || msg.includes('operation-not-allowed')) {
+        setGoogleProviderDisabled(true);
+      } else if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
+        setError('The Google sign-in popup was blocked by your browser. Please allow popups for this site and try again.');
+      } else if (!msg.includes('popup-closed-by-user') && code !== 'auth/popup-closed-by-user') {
+        setError(msg || 'Google sign-in was interrupted');
       }
     } finally {
       setLoading(false);
@@ -275,6 +290,58 @@ export const AuthModal: React.FC = () => {
                 (Or use Google Sign-In below)
               </span>
             </div>
+          </div>
+        )}
+
+        {unauthorizedDomain && (
+          <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-100 text-xs">
+            <div className="flex items-center gap-2 font-bold mb-1.5 text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>Domain Not Authorized for Google Sign-In</span>
+            </div>
+            <p className="leading-relaxed mb-2 text-zinc-700 dark:text-zinc-300">
+              The domain <code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded text-[11px] font-bold text-amber-900 dark:text-amber-200">{unauthorizedDomain}</code> is not in your Firebase project's Authorized Domains list (<code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[11px] font-bold">{firebaseProjectId}</code>).
+            </p>
+            <div className="bg-white/80 dark:bg-[#1E111C] p-2.5 rounded-xl border border-amber-200 dark:border-amber-900 mb-3 space-y-1 text-[11px]">
+              <div className="font-semibold text-zinc-800 dark:text-zinc-200">How to authorize in 3 steps:</div>
+              <ol className="list-decimal pl-4 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+                <li>Click <strong>Open Firebase Settings</strong> below.</li>
+                <li>Under <strong>Authorized domains</strong>, click <strong>Add domain</strong>.</li>
+                <li>Enter <code className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{unauthorizedDomain}</code> and click <strong>Save</strong>.</li>
+              </ol>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`https://console.firebase.google.com/project/${firebaseProjectId}/authentication/settings`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-colors"
+              >
+                <span>Authorize {unauthorizedDomain} in Console</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {googleProviderDisabled && (
+          <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-100 text-xs">
+            <div className="flex items-center gap-2 font-bold mb-1.5 text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>Google Sign-In Provider Disabled</span>
+            </div>
+            <p className="leading-relaxed mb-2 text-zinc-700 dark:text-zinc-300">
+              The Google sign-in provider is disabled in Firebase project <code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[11px] font-bold">{firebaseProjectId}</code>. Enable it in the Firebase Console under Authentication &gt; Sign-in method.
+            </p>
+            <a
+              href={`https://console.firebase.google.com/project/${firebaseProjectId}/authentication/providers`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-colors"
+            >
+              <span>Enable Google Provider</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
         )}
 

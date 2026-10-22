@@ -62,7 +62,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() &&
         incoming().keys().hasAll(['uid']) &&
-        incoming().keys().hasOnly(['uid']) &&
+        incoming().keys().hasOnly(['uid', 'username', 'createdAt']) &&
         incoming().uid is string &&
         incoming().uid == request.auth.uid;
       allow update, delete: if isSignedIn() &&
